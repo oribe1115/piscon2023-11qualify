@@ -1,0 +1,9 @@
+.vscode
+.idea
+
+.*
+!.gitignore
+!.gitkeep
+
+tmp
+pprof

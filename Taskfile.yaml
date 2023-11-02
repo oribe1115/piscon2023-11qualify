@@ -8,6 +8,8 @@ vars:
   SERVICE_NAME:
   ENV_FILE: .env
 
+  GIT_REPOSITORY: git@github.com:oribe1115/piscon2023-11qualify.git
+
   # 基本共通の変数 -------
   DB_PATH: /etc/mysql
   NGINX_PATH: /etc/nginx
@@ -166,6 +168,28 @@ tasks:
       - task: get-nginx-conf
       - task: get-service-file
       - task: get-env-file
+  
+  # 最初のインスタンスで実装をgitリポジトリに入れるために実行する
+  gitrepo-1st:
+    cmds:
+      - git config --global init.defaultBranch main
+      - git init
+      - git branch -m main
+      - git remote add origin {{.GIT_REPOSITORY}}
+      - git pull origin main
+      - echo "Setup gitignore and variables in Taskfile.yaml"
+  
+  # 2代目の以降のインスタンスでのgitのセットアップ
+  gitrepo-nst:
+    cmds:
+      - git config --global init.defaultBranch main
+      - git init
+      - git branch -m main
+      - git remote add origin {{.GIT_REPOSITORY}}
+      - cmd: git pull origin main
+        ignore_error: true
+      - git fetch origin main
+      - git reset --hard FETCH_HEAD
 
   # 本番中直接実行しないもの ---------
   install-tools:

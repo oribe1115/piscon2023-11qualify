@@ -85,13 +85,14 @@ type GetIsuListResponse struct {
 }
 
 type IsuCondition struct {
-	ID         int       `db:"id"`
-	JIAIsuUUID string    `db:"jia_isu_uuid"`
-	Timestamp  time.Time `db:"timestamp"`
-	IsSitting  bool      `db:"is_sitting"`
-	Condition  string    `db:"condition"`
-	Message    string    `db:"message"`
-	CreatedAt  time.Time `db:"created_at"`
+	ID             int       `db:"id"`
+	JIAIsuUUID     string    `db:"jia_isu_uuid"`
+	Timestamp      time.Time `db:"timestamp"`
+	IsSitting      bool      `db:"is_sitting"`
+	Condition      string    `db:"condition"`
+	ConditionLevel string    `db:"condition_level"`
+	Message        string    `db:"message"`
+	CreatedAt      time.Time `db:"created_at"`
 }
 
 type MySQLConnectionEnv struct {
@@ -338,6 +339,32 @@ func postInitialize(c echo.Context) error {
 	if err != nil {
 		c.Logger().Errorf("db error : %v", err)
 		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	//condition_level
+	conditions := []IsuCondition{}
+	db.Select(&conditions, "SELECT * FROM `isu_condition`")
+	if err != nil {
+		c.Logger().Errorf("db error : %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	for _, cond := range conditions {
+		if !isValidConditionFormat(cond.Condition) {
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		cLevel, err := calculateConditionLevel(cond.Condition)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "bad request body")
+		}
+
+		_, err = db.Exec(
+			"UPDATE `isu_condition` SET condition_level = ? WHERE id=?",
+			cLevel, cond.ID)
+		if err != nil {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
 	}
 
 	return c.JSON(http.StatusOK, InitializeResponse{
@@ -1021,20 +1048,34 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	conditions := []IsuCondition{}
 	var err error
 
+	var condition_level_query_builder strings.Builder
+	condition_level_query_builder.WriteString(" AND (FALSE")
+	for _, level := range []string{conditionLevelInfo, conditionLevelWarning, conditionLevelCritical} {
+		if _, ok := conditionLevel[level]; !ok {
+			continue
+		}
+		condition_level_query_builder.WriteString(" OR `condition_level`='")
+		condition_level_query_builder.WriteString(level)
+		condition_level_query_builder.WriteString("'")
+	}
+	condition_level_query_builder.WriteString(") ")
+
 	if startTime.IsZero() {
 		err = db.Select(&conditions,
 			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
-				"	ORDER BY `timestamp` DESC",
-			jiaIsuUUID, endTime,
+				condition_level_query_builder.String()+
+				"	ORDER BY `timestamp` DESC LIMIT ?",
+			jiaIsuUUID, endTime, limit,
 		)
 	} else {
 		err = db.Select(&conditions,
 			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
-				"	ORDER BY `timestamp` DESC",
-			jiaIsuUUID, endTime, startTime,
+				condition_level_query_builder.String()+
+				"	ORDER BY `timestamp` DESC LIMIT ?",
+			jiaIsuUUID, endTime, startTime, limit,
 		)
 	}
 	if err != nil {
@@ -1045,21 +1086,22 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	for _, c := range conditions {
 		cLevel, err := calculateConditionLevel(c.Condition)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("conditions format error: %s", c.Condition)
+		}
+		if _, ok := conditionLevel[cLevel]; !ok {
+			return nil, fmt.Errorf("conditions where error")
 		}
 
-		if _, ok := conditionLevel[cLevel]; ok {
-			data := GetIsuConditionResponse{
-				JIAIsuUUID:     c.JIAIsuUUID,
-				IsuName:        isuName,
-				Timestamp:      c.Timestamp.Unix(),
-				IsSitting:      c.IsSitting,
-				Condition:      c.Condition,
-				ConditionLevel: cLevel,
-				Message:        c.Message,
-			}
-			conditionsResponse = append(conditionsResponse, &data)
+		data := GetIsuConditionResponse{
+			JIAIsuUUID:     c.JIAIsuUUID,
+			IsuName:        isuName,
+			Timestamp:      c.Timestamp.Unix(),
+			IsSitting:      c.IsSitting,
+			Condition:      c.Condition,
+			ConditionLevel: cLevel,
+			Message:        c.Message,
 		}
+		conditionsResponse = append(conditionsResponse, &data)
 	}
 
 	if len(conditionsResponse) > limit {
@@ -1229,11 +1271,12 @@ func postIsuCondition(c echo.Context) error {
 	//}
 
 	type datum struct {
-		JiaIsuUUID string    `db:"jia_isu_uuid"`
-		Timestamp  time.Time `db:"timestamp"`
-		IsSitting  bool      `db:"is_sitting"`
-		Condition  string    `db:"condition"`
-		Message    string    `db:"message"`
+		JiaIsuUUID     string    `db:"jia_isu_uuid"`
+		Timestamp      time.Time `db:"timestamp"`
+		IsSitting      bool      `db:"is_sitting"`
+		Condition      string    `db:"condition"`
+		ConditionLevel string    `db:"condition_level"`
+		Message        string    `db:"message"`
 	}
 
 	data := make([]datum, 0)
@@ -1243,20 +1286,25 @@ func postIsuCondition(c echo.Context) error {
 		if !isValidConditionFormat(cond.Condition) {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
+		cLevel, err := calculateConditionLevel(cond.Condition)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "bad request body")
+		}
 
 		data = append(data, datum{
-			JiaIsuUUID: jiaIsuUUID,
-			Timestamp:  timestamp,
-			IsSitting:  cond.IsSitting,
-			Condition:  cond.Condition,
-			Message:    cond.Message,
+			JiaIsuUUID:     jiaIsuUUID,
+			Timestamp:      timestamp,
+			IsSitting:      cond.IsSitting,
+			Condition:      cond.Condition,
+			ConditionLevel: cLevel,
+			Message:        cond.Message,
 		})
 
 	}
 
 	query := "INSERT INTO `isu_condition`" +
-		"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)" +
-		"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)"
+		"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)" +
+		"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
 
 	_, err = db.NamedExec(query, data)
 	if err != nil {

@@ -1126,7 +1126,15 @@ func getIsuConditions(c echo.Context) error {
 func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, conditionLevel map[string]interface{}, startTime time.Time,
 	limit int, isuName string) ([]*GetIsuConditionResponse, error) {
 
-	conditions := []IsuCondition{}
+	type conditionDataTmp struct {
+		Timestamp      time.Time `db:"timestamp"`
+		IsSitting      bool      `db:"is_sitting"`
+		Condition      string    `db:"condition"`
+		ConditionLevel string    `db:"condition_level"`
+		Message        string    `db:"message"`
+	}
+	const getColumn = " `timestamp`, `is_sitting`, `condition`, `condition_level`, `message` "
+	conditions := []conditionDataTmp{}
 	var err error
 
 	var condition_level_query_builder strings.Builder
@@ -1155,7 +1163,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 
 	if startTime.IsZero() {
 		err = db.Select(&conditions,
-			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				condition_level_query_builder.String()+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
@@ -1163,7 +1171,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 		)
 	} else {
 		err = db.Select(&conditions,
-			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
 				condition_level_query_builder.String()+
@@ -1177,21 +1185,21 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 
 	conditionsResponse := []*GetIsuConditionResponse{}
 	for _, c := range conditions {
-		cLevel, err := calculateConditionLevel(c.Condition)
-		if err != nil {
-			return nil, fmt.Errorf("conditions format error: %s", c.Condition)
-		}
-		if _, ok := conditionLevel[cLevel]; !ok {
-			return nil, fmt.Errorf("conditions where error")
-		}
+		// cLevel, err := calculateConditionLevel(c.Condition)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("conditions format error: %s", c.Condition)
+		// }
+		// if _, ok := conditionLevel[cLevel]; !ok {
+		// 	return nil, fmt.Errorf("conditions where error")
+		// }
 
 		data := GetIsuConditionResponse{
-			JIAIsuUUID:     c.JIAIsuUUID,
+			JIAIsuUUID:     jiaIsuUUID,
 			IsuName:        isuName,
 			Timestamp:      c.Timestamp.Unix(),
 			IsSitting:      c.IsSitting,
 			Condition:      c.Condition,
-			ConditionLevel: cLevel,
+			ConditionLevel: c.ConditionLevel,
 			Message:        c.Message,
 		}
 		conditionsResponse = append(conditionsResponse, &data)

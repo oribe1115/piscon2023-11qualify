@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -20,6 +18,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/motoki317/sc"
 
@@ -325,6 +326,26 @@ func postInitialize(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
+	reciver_err := make(chan error)
+	go func() {
+		defer close(reciver_err)
+		req, err := http.NewRequest(http.MethodPost, "http://172.31.38.28/initialize", bytes.NewBuffer([]byte{}))
+		if err != nil {
+			reciver_err <- err
+			return
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			reciver_err <- err
+			return
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusAccepted {
+			reciver_err <- fmt.Errorf("JIAService returned error: status code %v", res.StatusCode)
+			return
+		}
+	}()
 	cmd := exec.Command("../sql/init.sh")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stderr
@@ -369,8 +390,12 @@ func postInitialize(c echo.Context) error {
 		}
 
 	}
-
 	cacheIsuExist.Purge()
+	err = <-reciver_err
+	if err != nil {
+		c.Logger().Errorf("initialize error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
 
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",

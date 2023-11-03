@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -302,6 +303,48 @@ func jsonEncode(res any) []byte {
 	return b
 }
 
+var stmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+	stmt, err := db.PreparexContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	runtime.SetFinalizer(stmt, stmt.Close)
+	return stmt, nil
+}, 90*time.Second, 90*time.Second)
+
+func dbExec(query string, args ...any) (sql.Result, error) {
+	stmt, err := stmtCache.Get(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	return stmt.Exec(args...)
+}
+
+func dbGet(dest interface{}, query string, args ...interface{}) error {
+	stmt, err := stmtCache.Get(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	return stmt.Get(dest, args...)
+}
+
+func dbSelect(dest interface{}, query string, args ...interface{}) error {
+	stmt, err := stmtCache.Get(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	return stmt.Select(dest, args...)
+}
+
+var namedStmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.NamedStmt, error) {
+	stmt, err := db.PrepareNamedContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	runtime.SetFinalizer(stmt, stmt.Close)
+	return stmt, nil
+}, 90*time.Second, 90*time.Second)
+
 func getSession(r *http.Request) (*sessions.Session, error) {
 	session, err := sessionStore.Get(r, sessionName)
 	if err != nil {
@@ -323,7 +366,7 @@ func getUserIDFromSession(c echo.Context) (string, int, error) {
 	jiaUserID := _jiaUserID.(string)
 	var count int
 
-	err = db.Get(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+	err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
 		jiaUserID)
 	if err != nil {
 		return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
@@ -399,7 +442,7 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	_, err = db.Exec(
+	_, err = dbExec(
 		"INSERT INTO `isu_association_config` (`name`, `url`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `url` = VALUES(`url`)",
 		"jia_service_url",
 		request.JIAServiceURL,
@@ -411,7 +454,7 @@ func postInitialize(c echo.Context) error {
 
 	//condition_level
 	conditions := []IsuCondition{}
-	db.Select(&conditions, "SELECT * FROM `isu_condition`")
+	dbSelect(&conditions, "SELECT * FROM `isu_condition`")
 	if err != nil {
 		c.Logger().Errorf("db error : %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -425,7 +468,7 @@ func postInitialize(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
-		_, err = db.Exec(
+		_, err = dbExec(
 			"UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?",
 			cLevel, cond.JIAIsuUUID, cond.Timestamp)
 		if err != nil {
@@ -481,7 +524,7 @@ func postAuthentication(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "invalid JWT payload")
 	}
 
-	_, err = db.Exec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
+	_, err = dbExec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -788,7 +831,7 @@ func getIsuID(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	//var res Isu
-	//err = db.Get(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = dbGet(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	if errors.Is(err, sql.ErrNoRows) {
@@ -832,7 +875,7 @@ func getIsuIcon(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	//var count int
-	//err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
@@ -1122,7 +1165,7 @@ func getIsuConditions(c echo.Context) error {
 	}
 
 	var isuName string
-	//err = db.Get(&isuName,
+	//err = dbGet(&isuName,
 	//	"SELECT name FROM `isu` WHERE `jia_isu_uuid` = ? AND `jia_user_id` = ?",
 	//	jiaIsuUUID, jiaUserID,
 	//)
@@ -1186,7 +1229,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	}
 
 	if startTime.IsZero() {
-		err = db.Select(&conditions,
+		err = dbSelect(&conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				conditionQuery+
@@ -1194,7 +1237,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 			jiaIsuUUID, endTime, limit,
 		)
 	} else {
-		err = db.Select(&conditions,
+		err = dbSelect(&conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
@@ -1259,7 +1302,7 @@ func calculateConditionLevel(condition string) (string, error) {
 // ISUの性格毎の最新のコンディション情報
 func getTrend(c echo.Context) error {
 	//characterList := []Isu{}
-	//err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	//err := dbSelect(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
 	//	return c.NoContent(http.StatusInternalServerError)
@@ -1269,7 +1312,7 @@ func getTrend(c echo.Context) error {
 	//
 	//for _, character := range characterList {
 	//	isuList := []Isu{}
-	//	err = db.Select(&isuList,
+	//	err = dbSelect(&isuList,
 	//		"SELECT * FROM `isu` WHERE `character` = ?",
 	//		character.Character,
 	//	)
@@ -1282,7 +1325,7 @@ func getTrend(c echo.Context) error {
 	//	characterCriticalIsuConditions := []*TrendCondition{}
 	//	for _, isu := range isuList {
 	//		conditions := []IsuCondition{}
-	//		err = db.Select(&conditions,
+	//		err = dbSelect(&conditions,
 	//			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC LIMIT 1",
 	//			isu.JIAIsuUUID,
 	//		)
@@ -1345,7 +1388,7 @@ var trendDataCache = sc.NewMust(getTrendData, 500*time.Millisecond, 500*time.Mil
 
 func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	characterList := []Isu{}
-	err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	err := dbSelect(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	if err != nil {
 		return nil, err
 	}
@@ -1362,7 +1405,7 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"
-	err = db.Select(&lastConditions, query)
+	err = dbSelect(&lastConditions, query)
 	if err != nil {
 		return nil, err
 	}
@@ -1426,7 +1469,12 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	}
 
 	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	_, err := db.NamedExec(query, toInsert)
+	stmt, err := namedStmtCache.Get(context.Background(), query)
+	if err != nil {
+		log.Errorf("condition batch insert db error: %v\n", err)
+		return struct{}{}, err
+	}
+	_, err = stmt.Exec(toInsert)
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)
 		return struct{}{}, err
@@ -1438,7 +1486,7 @@ var errIsuNotFound = errors.New("isu not found")
 
 func retrieveIsu(_ context.Context, jiaIsuUUID string) (*Isu, error) {
 	var isu Isu
-	err := db.Get(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	err := dbGet(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errIsuNotFound
@@ -1475,7 +1523,7 @@ func postIsuCondition(c echo.Context) error {
 	}
 
 	//var count int
-	//err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
 	//	return c.NoContent(http.StatusInternalServerError)

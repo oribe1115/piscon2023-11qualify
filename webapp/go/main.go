@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -20,6 +18,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/motoki317/sc"
 
@@ -319,12 +320,41 @@ func getJIAServiceURL(tx *sqlx.Tx) string {
 // POST /initialize
 // サービスを初期化
 func postInitialize(c echo.Context) error {
+
+	if os.Getenv("SERVER_ID") == "s3" {
+		cacheIsuExist.Purge()
+
+		return c.JSON(http.StatusOK, InitializeResponse{
+			Language: "go",
+		})
+	}
+
 	var request InitializeRequest
 	err := c.Bind(&request)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
+	reciver_err := make(chan error)
+	go func() {
+		defer close(reciver_err)
+		req, err := http.NewRequest(http.MethodPost, "http://172.31.38.28/initialize", bytes.NewBuffer([]byte{}))
+		if err != nil {
+			reciver_err <- err
+			return
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			reciver_err <- err
+			return
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			reciver_err <- fmt.Errorf("Initialize returned error: status code %v", res.StatusCode)
+			return
+		}
+	}()
 	cmd := exec.Command("../sql/init.sh")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stderr
@@ -369,8 +399,12 @@ func postInitialize(c echo.Context) error {
 		}
 
 	}
-
 	cacheIsu.Purge()
+	err = <-reciver_err
+	if err != nil {
+		c.Logger().Errorf("initialize error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
 
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
@@ -1199,16 +1233,18 @@ func getTrend(c echo.Context) error {
 	//		})
 	//}
 
-	res, err := getTrendData()
+	res, err := trendDataCache.Get(context.Background(), struct{}{})
 	if err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, *res)
+	return c.JSON(http.StatusOK, res)
 }
 
-func getTrendData() (*[]TrendResponse, error) {
+var trendDataCache = sc.NewMust(getTrendData, 500*time.Millisecond, 500*time.Millisecond)
+
+func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	characterList := []Isu{}
 	err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	if err != nil {
@@ -1216,14 +1252,14 @@ func getTrendData() (*[]TrendResponse, error) {
 	}
 
 	type latestConditionData struct {
-		IsuId     int       `db:"isu_id"`
-		Character string    `db:"character"`
-		Timestamp time.Time `db:"timestamp"`
-		Condition string    `db:"condition"`
+		IsuId          int       `db:"isu_id"`
+		Character      string    `db:"character"`
+		Timestamp      time.Time `db:"timestamp"`
+		ConditionLevel string    `db:"condition_level"`
 	}
 
 	lastConditions := []latestConditionData{}
-	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` FROM isu_condition AS cond " +
+	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition_level` FROM isu_condition AS cond " +
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"
@@ -1243,34 +1279,29 @@ func getTrendData() (*[]TrendResponse, error) {
 	}
 
 	for _, condition := range lastConditions {
-		conditionLevel, err := calculateConditionLevel(condition.Condition)
-		if err != nil {
-			return nil, err
-		}
-
 		trendCondition := &TrendCondition{
 			ID:        condition.IsuId,
 			Timestamp: condition.Timestamp.Unix(),
 		}
 
 		res := perCharacter[condition.Character]
-		switch conditionLevel {
-		case "info":
+		switch condition.ConditionLevel {
+		case conditionLevelInfo:
 			res.Info = append(res.Info, trendCondition)
-		case "warning":
+		case conditionLevelWarning:
 			res.Warning = append(res.Warning, trendCondition)
-		case "critical":
+		case conditionLevelCritical:
 			res.Critical = append(res.Critical, trendCondition)
 		}
 	}
 
-	responses := make([]TrendResponse, 0)
+	responses := make([]*TrendResponse, 0, len(characterList))
 	for _, character := range characterList {
 		res := perCharacter[character.Character]
-		responses = append(responses, *res)
+		responses = append(responses, res)
 	}
 
-	return &responses, nil
+	return responses, nil
 }
 
 type conditionInsertDatum struct {

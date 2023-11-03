@@ -348,9 +348,10 @@ tasks:
   restart:
     cmds:
       - sudo systemctl daemon-reload
+      - sudo systemctl stop jiaapi-mock.service
       - sudo systemctl restart {{.SERVICE_NAME}}
       - sudo systemctl restart mysql
-      - sudo systemctl restart nginx
+      - sh -c "if [ $SERVER_ID = "s1" ]; then (sudo systemctl restart nginx) fi"
 
   watch-service-log:
     desc: アプリのログを見る

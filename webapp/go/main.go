@@ -691,7 +691,8 @@ func getIsuList(c echo.Context) error {
 
 	data := []IsuListDatum{}
 	query := "SELECT isu.id, isu.jia_isu_uuid, name, `character`, timestamp, is_sitting, message, COALESCE(`condition`, 'none') AS `condition` " +
-		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
+		"FROM isu " +
+		"LEFT OUTER JOIN isu_condition AS cond ON isu.jia_isu_uuid = cond.jia_isu_uuid" +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"AND i.jia_user_id = ?"
 

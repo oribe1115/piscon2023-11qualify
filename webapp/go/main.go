@@ -1538,7 +1538,10 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		return struct{}{}, err
 	}
 	query = "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)" +
-		"ON DUPLICATE KEY UPDATE timestamp=VALUES(timestamp),is_sitting=VALUES(is_sitting),condition=VALUES(condition),message=VALUES(message)"
+		"ON DUPLICATE KEY UPDATE timestamp=IF(timestamp<VALUES(timestamp),VALUES(timestamp),timestamp)" +
+		",is_sitting=IF(timestamp<VALUES(timestamp),VALUES(is_sitting),is_sitting)" +
+		",condition=IF(timestamp<VALUES(timestamp),VALUES(condition),condition)" +
+		",message=IF(timestamp<VALUES(timestamp),VALUES(message),message)"
 	_, err = db.NamedExec(query, toInsert)
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)

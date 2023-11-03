@@ -1052,8 +1052,9 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 		} else {
 			condition_level_query_builder.WriteString(" OR ")
 		}
-		condition_level_query_builder.WriteString("condition_level=")
-		condition_level_query_builder.WriteString(conditionLevelInfo)
+		condition_level_query_builder.WriteString("`condition_level`='")
+		condition_level_query_builder.WriteString(level)
+		condition_level_query_builder.WriteString("'")
 	}
 	if condition_level_query_builder.Len() != 0 {
 		condition_level_query_builder.WriteString(") ")

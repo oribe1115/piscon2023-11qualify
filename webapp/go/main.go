@@ -814,14 +814,16 @@ func getIsuGraph(c echo.Context) error {
 }
 
 // グラフのデータ点を一日分生成
-func generateIsuGraphResponse(tx *sqlx.Tx, jiaIsuUUID string, graphDate time.Time) ([]GraphResponse, error) {
-	dataPoints := []GraphDataPointWithInfo{}
+func generateIsuGraphResponse(tx *sqlx.Tx, jiaIsuUUID string, startTime time.Time) ([]GraphResponse, error) {
+	endTime := startTime.Add(time.Hour * 24)
+
+	dataPoints := make([]GraphDataPointWithInfo, 0, 24)
 	conditionsInThisHour := []IsuCondition{}
 	timestampsInThisHour := []int64{}
 	var startTimeInThisHour time.Time
 	var condition IsuCondition
 
-	rows, err := tx.Queryx("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` ASC", jiaIsuUUID)
+	rows, err := tx.Queryx("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("db error: %v", err)
 	}
@@ -870,33 +872,16 @@ func generateIsuGraphResponse(tx *sqlx.Tx, jiaIsuUUID string, graphDate time.Tim
 				ConditionTimestamps: timestampsInThisHour})
 	}
 
-	endTime := graphDate.Add(time.Hour * 24)
-	startIndex := len(dataPoints)
-	endNextIndex := len(dataPoints)
-	for i, graph := range dataPoints {
-		if startIndex == len(dataPoints) && !graph.StartAt.Before(graphDate) {
-			startIndex = i
-		}
-		if endNextIndex == len(dataPoints) && graph.StartAt.After(endTime) {
-			endNextIndex = i
-		}
-	}
-
-	filteredDataPoints := []GraphDataPointWithInfo{}
-	if startIndex < endNextIndex {
-		filteredDataPoints = dataPoints[startIndex:endNextIndex]
-	}
-
 	responseList := []GraphResponse{}
 	index := 0
-	thisTime := graphDate
+	thisTime := startTime
 
-	for thisTime.Before(graphDate.Add(time.Hour * 24)) {
+	for thisTime.Before(endTime) {
 		var data *GraphDataPoint
 		timestamps := []int64{}
 
-		if index < len(filteredDataPoints) {
-			dataWithInfo := filteredDataPoints[index]
+		if index < len(dataPoints) {
+			dataWithInfo := dataPoints[index]
 
 			if dataWithInfo.StartAt.Equal(thisTime) {
 				data = &dataWithInfo.Data
@@ -921,36 +906,36 @@ func generateIsuGraphResponse(tx *sqlx.Tx, jiaIsuUUID string, graphDate time.Tim
 
 // 複数のISUのコンディションからグラフの一つのデータ点を計算
 func calculateGraphDataPoint(isuConditions []IsuCondition) (GraphDataPoint, error) {
-	conditionsCount := map[string]int{"is_broken": 0, "is_dirty": 0, "is_overweight": 0}
+	isBrokenCount := 0
+	isDirtyCount := 0
+	isOverweightCount := 0
 	rawScore := 0
-	for _, condition := range isuConditions {
-		badConditionsCount := 0
-
-		if !isValidConditionFormat(condition.Condition) {
-			return GraphDataPoint{}, fmt.Errorf("invalid condition format")
-		}
-
-		for _, condStr := range strings.Split(condition.Condition, ",") {
-			keyValue := strings.Split(condStr, "=")
-
-			conditionName := keyValue[0]
-			if keyValue[1] == "true" {
-				conditionsCount[conditionName] += 1
-				badConditionsCount++
-			}
-		}
-
-		if badConditionsCount >= 3 {
-			rawScore += scoreConditionLevelCritical
-		} else if badConditionsCount >= 1 {
-			rawScore += scoreConditionLevelWarning
-		} else {
-			rawScore += scoreConditionLevelInfo
-		}
-	}
-
 	sittingCount := 0
 	for _, condition := range isuConditions {
+		isBroken := strings.Contains(condition.Condition, "is_broken=true")
+		isDirty := strings.Contains(condition.Condition, "is_dirty=true")
+		isOverweight := strings.Contains(condition.Condition, "is_overweight=true")
+		if isBroken {
+			isBrokenCount++
+		}
+		if isDirty {
+			isDirtyCount++
+		}
+		if isOverweight {
+			isOverweightCount++
+		}
+
+		switch condition.ConditionLevel {
+		case conditionLevelCritical:
+			rawScore += scoreConditionLevelCritical
+		case conditionLevelWarning:
+			rawScore += scoreConditionLevelWarning
+		case conditionLevelInfo:
+			rawScore += scoreConditionLevelInfo
+		default:
+			return GraphDataPoint{}, fmt.Errorf("invalid condition level: %v", condition.ConditionLevel)
+		}
+
 		if condition.IsSitting {
 			sittingCount++
 		}
@@ -961,9 +946,9 @@ func calculateGraphDataPoint(isuConditions []IsuCondition) (GraphDataPoint, erro
 	score := rawScore * 100 / 3 / isuConditionsLength
 
 	sittingPercentage := sittingCount * 100 / isuConditionsLength
-	isBrokenPercentage := conditionsCount["is_broken"] * 100 / isuConditionsLength
-	isOverweightPercentage := conditionsCount["is_overweight"] * 100 / isuConditionsLength
-	isDirtyPercentage := conditionsCount["is_dirty"] * 100 / isuConditionsLength
+	isBrokenPercentage := isBrokenCount * 100 / isuConditionsLength
+	isOverweightPercentage := isOverweightCount * 100 / isuConditionsLength
+	isDirtyPercentage := isDirtyCount * 100 / isuConditionsLength
 
 	dataPoint := GraphDataPoint{
 		Score: score,

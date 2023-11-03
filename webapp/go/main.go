@@ -1088,19 +1088,20 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 		if err != nil {
 			return nil, fmt.Errorf("conditions format error: %s", c.Condition)
 		}
-
-		if _, ok := conditionLevel[cLevel]; ok {
-			data := GetIsuConditionResponse{
-				JIAIsuUUID:     c.JIAIsuUUID,
-				IsuName:        isuName,
-				Timestamp:      c.Timestamp.Unix(),
-				IsSitting:      c.IsSitting,
-				Condition:      c.Condition,
-				ConditionLevel: cLevel,
-				Message:        c.Message,
-			}
-			conditionsResponse = append(conditionsResponse, &data)
+		if _, ok := conditionLevel[cLevel]; !ok {
+			return nil, fmt.Errorf("conditions where error")
 		}
+
+		data := GetIsuConditionResponse{
+			JIAIsuUUID:     c.JIAIsuUUID,
+			IsuName:        isuName,
+			Timestamp:      c.Timestamp.Unix(),
+			IsSitting:      c.IsSitting,
+			Condition:      c.Condition,
+			ConditionLevel: cLevel,
+			Message:        c.Message,
+		}
+		conditionsResponse = append(conditionsResponse, &data)
 	}
 
 	if len(conditionsResponse) > limit {

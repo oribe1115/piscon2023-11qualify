@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1079,10 +1080,9 @@ func getIsuConditions(c echo.Context) error {
 	if conditionLevelCSV == "" {
 		return c.String(http.StatusBadRequest, "missing: condition_level")
 	}
-	conditionLevel := map[string]interface{}{}
-	for _, level := range strings.Split(conditionLevelCSV, ",") {
-		conditionLevel[level] = struct{}{}
-	}
+	conditionLevel := strings.Split(conditionLevelCSV, ",")
+	slices.Sort(conditionLevel)
+	slices.Compact(conditionLevel)
 
 	startTimeStr := c.QueryParam("start_time")
 	var startTime time.Time
@@ -1133,38 +1133,45 @@ func getIsuConditions(c echo.Context) error {
 }
 
 // ISUのコンディションをDBから取得
-func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, conditionLevel map[string]interface{}, startTime time.Time,
+func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, conditionLevel []string, startTime time.Time,
 	limit int, isuName string) ([]*GetIsuConditionResponse, error) {
 
-	conditions := []IsuCondition{}
+	type conditionDataTmp struct {
+		Timestamp      time.Time `db:"timestamp"`
+		IsSitting      bool      `db:"is_sitting"`
+		Condition      string    `db:"condition"`
+		ConditionLevel string    `db:"condition_level"`
+		Message        string    `db:"message"`
+	}
+	const getColumn = " `timestamp`, `is_sitting`, `condition`, `condition_level`, `message` "
+	conditions := []conditionDataTmp{}
 	var err error
 
-	var condition_level_query_builder strings.Builder
-	condition_level_query_builder.WriteString(" AND (FALSE")
-	for _, level := range []string{conditionLevelInfo, conditionLevelWarning, conditionLevelCritical} {
-		if _, ok := conditionLevel[level]; !ok {
-			continue
-		}
-		condition_level_query_builder.WriteString(" OR `condition_level`='")
-		condition_level_query_builder.WriteString(level)
-		condition_level_query_builder.WriteString("'")
+	var conditionQuery string
+	switch len(conditionLevel) {
+	case 0:
+		return []*GetIsuConditionResponse{}, nil
+	case 1:
+		conditionQuery = fmt.Sprintf(" AND `condition_level` = '%v'", conditionLevel[0])
+	case 2:
+		conditionQuery = fmt.Sprintf(" AND `condition_level` IN ('%v', '%v')", conditionLevel[0], conditionLevel[1])
+	case 3:
 	}
-	condition_level_query_builder.WriteString(") ")
 
 	if startTime.IsZero() {
 		err = db.Select(&conditions,
-			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
-				condition_level_query_builder.String()+
+				conditionQuery+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
 			jiaIsuUUID, endTime, limit,
 		)
 	} else {
 		err = db.Select(&conditions,
-			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
-				condition_level_query_builder.String()+
+				conditionQuery+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
 			jiaIsuUUID, endTime, startTime, limit,
 		)
@@ -1175,21 +1182,21 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 
 	conditionsResponse := []*GetIsuConditionResponse{}
 	for _, c := range conditions {
-		cLevel, err := calculateConditionLevel(c.Condition)
-		if err != nil {
-			return nil, fmt.Errorf("conditions format error: %s", c.Condition)
-		}
-		if _, ok := conditionLevel[cLevel]; !ok {
-			return nil, fmt.Errorf("conditions where error")
-		}
+		// cLevel, err := calculateConditionLevel(c.Condition)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("conditions format error: %s", c.Condition)
+		// }
+		// if _, ok := conditionLevel[cLevel]; !ok {
+		// 	return nil, fmt.Errorf("conditions where error")
+		// }
 
 		data := GetIsuConditionResponse{
-			JIAIsuUUID:     c.JIAIsuUUID,
+			JIAIsuUUID:     jiaIsuUUID,
 			IsuName:        isuName,
 			Timestamp:      c.Timestamp.Unix(),
 			IsSitting:      c.IsSitting,
 			Condition:      c.Condition,
-			ConditionLevel: cLevel,
+			ConditionLevel: c.ConditionLevel,
 			Message:        c.Message,
 		}
 		conditionsResponse = append(conditionsResponse, &data)

@@ -320,6 +320,15 @@ func getJIAServiceURL(tx *sqlx.Tx) string {
 // POST /initialize
 // サービスを初期化
 func postInitialize(c echo.Context) error {
+
+	if os.Getenv("SERVER_ID") == "s3" {
+		cacheIsuExist.Purge()
+
+		return c.JSON(http.StatusOK, InitializeResponse{
+			Language: "go",
+		})
+	}
+
 	var request InitializeRequest
 	err := c.Bind(&request)
 	if err != nil {

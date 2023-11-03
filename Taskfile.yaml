@@ -337,9 +337,9 @@ tasks:
   restart:
     cmds:
       - sudo systemctl daemon-reload
+      - sudo systemctl stop mysql
+      - sudo systemctl stop jiaapi-mock.service
       - sudo systemctl restart {{.SERVICE_NAME}}
-      - sudo systemctl restart mysql
-      - sudo systemctl restart nginx
 
   watch-service-log:
     desc: アプリのログを見る

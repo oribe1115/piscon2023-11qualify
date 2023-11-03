@@ -173,6 +173,7 @@ tasks:
     cmds:
       - task: install-tools
       - task: git-setup
+      - task: swap-setup
   
   netdata-setup:
     # desc: netdataの設定ファイルを配置する
@@ -242,7 +243,17 @@ tasks:
       - git config --global user.name "isucon"
       # deploykeyの作成
       - ssh-keygen -t ed25519
-  
+
+  swap-setup:
+    status:
+      - sudo swapon --show | read REPLY
+    cmds:
+      - sudo fallocate -l 2G /swapfile
+      - sudo chmod 600 /swapfile
+      - sudo mkswap /swapfile
+      - sudo swapon /swapfile
+      - echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
   # 環境変数SERVER_IDが登録されているかを検証する
   # SERVER_IDの値を使うコマンドでは、基本preconditionsで呼ぶようにする
   check-server-id:

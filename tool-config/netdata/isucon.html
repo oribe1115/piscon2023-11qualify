@@ -90,15 +90,13 @@
     ></div>
 
     <h2>Per User</h2>
-    <div
-      data-chartid="user.cpu_utilization"
-      data-chart-library="dygraph"
-      data-height="250"
-      data-decimal-digits="-1"
-      data-dygraph-valuerange="[0, 100]"
-      data-legend-position="bottom"
-      class="netdata-container-with-legend netdata-container-with-legend--bottom"
-    ></div>
+    <div 
+      data-track="overview-page::usergroup.cpu_utilization::container"
+      data-chartid="usergroup.cpu_utilization" 
+      role="graphics-object" 
+      aria-roledescription="chart" 
+      data-submenuid="usergroup|cpu" 
+      size="365" height="360px" data-testid="chart"></div>
     <div
       data-netdata="user.netdata_mem_usage"
       data-chart-library="dygraph"

@@ -692,7 +692,7 @@ func getIsuList(c echo.Context) error {
 
 	data := []IsuListDatum{}
 	query := "SELECT isu.id, isu.jia_isu_uuid, name, `character`, " +
-		"COALESCE(timestamp, 0) AS timestamp, " +
+		"COALESCE(timestamp, NOW()) AS timestamp, " +
 		"COALESCE(is_sitting, 0) AS is_sitting, " +
 		"COALESCE(message, '') AS message, " +
 		"COALESCE(`condition`, 'none') AS `condition` " +

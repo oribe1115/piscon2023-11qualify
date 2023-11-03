@@ -647,18 +647,20 @@ func getIsuList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	query := "SELECT * FROM `isu_condition` WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition WHERE jia_isu_uuid IN (?) GROUP BY jia_isu_uuid)"
-	jiaIsuIDs := lo.Map(isuList, func(isu Isu, _ int) any { return isu.JIAIsuUUID })
-	query, args, err := sqlx.In(query, jiaIsuIDs)
-	if err != nil {
-		c.Logger().Errorf("sqlx.In error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
 	var conditions []*IsuCondition
-	err = dbSelect(&conditions, query, args...)
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	if len(isuList) > 0 {
+		query := "SELECT * FROM `isu_condition` WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition WHERE jia_isu_uuid IN (?) GROUP BY jia_isu_uuid)"
+		jiaIsuIDs := lo.Map(isuList, func(isu Isu, _ int) any { return isu.JIAIsuUUID })
+		query, args, err := sqlx.In(query, jiaIsuIDs)
+		if err != nil {
+			c.Logger().Errorf("sqlx.In error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		err = dbSelect(&conditions, query, args...)
+		if err != nil {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 	conditionsMap := lo.SliceToMap(conditions, func(c *IsuCondition) (string, *IsuCondition) { return c.JIAIsuUUID, c })
 

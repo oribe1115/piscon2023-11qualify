@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/motoki317/sc"
@@ -211,6 +212,10 @@ func init() {
 	}
 }
 
+var benchstart atomic.Pointer[time.Time]
+
+const benchtime = (60 + 20 + 60) * time.Second
+
 func main() {
 	//http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 	go func() {
@@ -257,6 +262,24 @@ func main() {
 	db.SetMaxIdleConns(650)
 	db.SetMaxOpenConns(650)
 	defer db.Close()
+
+	tmpTime := &time.Time{}
+	*tmpTime = time.Now()
+	benchstart.Store(tmpTime)
+	go func() {
+		for {
+			time.Sleep(benchtime + 1*time.Second)
+			//ベンチ中: now <= benchstart+benchtime
+			if time.Now().Add(-benchtime).Before(*benchstart.Load()) {
+				continue
+			}
+			var err error = db.Ping()
+			if err != nil {
+				e.Logger.Fatalf("db ping error %v", err)
+				panic(err)
+			}
+		}
+	}()
 
 	postIsuConditionTargetBaseURL = os.Getenv("POST_ISUCONDITION_TARGET_BASE_URL")
 	if postIsuConditionTargetBaseURL == "" {
@@ -317,6 +340,10 @@ func getJIAServiceURL(tx *sqlx.Tx) string {
 // POST /initialize
 // サービスを初期化
 func postInitialize(c echo.Context) error {
+
+	tmpTime := &time.Time{}
+	*tmpTime = time.Now()
+	benchstart.Store(tmpTime)
 
 	if os.Getenv("SERVER_ID") == "s3" {
 		cacheIsu.Purge()

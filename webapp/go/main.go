@@ -8,9 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/motoki317/sc"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -20,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/motoki317/sc"
 
 	"github.com/felixge/fgprof"
 
@@ -1299,11 +1299,11 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 // ISUからのコンディションを受け取る
 func postIsuCondition(c echo.Context) error {
 	// TODO: 一定割合リクエストを落としてしのぐようにしたが、本来は全量さばけるようにすべき
-	dropProbability := 0.9
-	if rand.Float64() <= dropProbability {
-		//c.Logger().Warnf("drop post isu condition request")
-		return c.NoContent(http.StatusAccepted)
-	}
+	// dropProbability := 0.9
+	// if rand.Float64() <= dropProbability {
+	// 	//c.Logger().Warnf("drop post isu condition request")
+	// 	return c.NoContent(http.StatusAccepted)
+	// }
 
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 	if jiaIsuUUID == "" {

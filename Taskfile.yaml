@@ -74,9 +74,21 @@ tasks:
     deps:
       - task: pprof-check
       - task: fgprof-check
-  
+
+  kill-pprof:
+    status:
+      - sh -c "! sudo lsof -t -i :8090"
+    cmd: sudo lsof -t -i :8090 | xargs kill -9
+
+  kill-fgprof:
+    status:
+      - sh -c "! sudo lsof -i :9090"
+    cmd: sudo lsof -t -i :9090 | xargs kill -9
+
   pprof-check:
     # desc: pprofでの最新データを確認する
+    deps:
+      - kill-pprof
     vars:
       LATEST:
         sh: ls -rt ~/pprof/ | tail -n 1
@@ -85,6 +97,8 @@ tasks:
   
   fgprof-check:
     # desc: fgprofでの最新データを確認する
+    deps:
+      - kill-fgprof
     vars:
       LATEST:
         sh: ls -rt ~/fgprof/ | tail -n 1

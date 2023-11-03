@@ -694,7 +694,8 @@ func getIsuList(c echo.Context) error {
 		"FROM isu " +
 		"LEFT OUTER JOIN isu_condition AS cond ON isu.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
-		"AND isu.jia_user_id = ?"
+		"AND isu.jia_user_id = ? " +
+		"ORDER BY isu.id DESC"
 
 	err = dbSelect(&data, query, jiaUserID)
 	if err != nil {

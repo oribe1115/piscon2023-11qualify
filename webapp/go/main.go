@@ -690,7 +690,11 @@ func getIsuList(c echo.Context) error {
 	//}
 
 	data := []IsuListDatum{}
-	query := "SELECT isu.id, isu.jia_isu_uuid, name, `character`, timestamp, is_sitting, message, COALESCE(`condition`, 'none') AS `condition` " +
+	query := "SELECT isu.id, isu.jia_isu_uuid, name, `character`, " +
+		"COALESCE(timestamp, 0) AS timestamp, " +
+		"COALESCE(is_sitting, 0) AS is_sitting, " +
+		"COALESCE(message, '') AS message, " +
+		"COALESCE(`condition`, 'none') AS `condition` " +
 		"FROM isu " +
 		"LEFT OUTER JOIN latest_isu_condition AS cond ON isu.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE isu.jia_user_id = ? " +
@@ -736,15 +740,15 @@ func getIsuList(c echo.Context) error {
 }
 
 type IsuListDatum struct {
-	IsuID          int        `db:"id"`
-	Name           string     `db:"name"`
-	Character      string     `db:"character"`
-	JIAIsuUUID     string     `db:"jia_isu_uuid"`
-	Timestamp      *time.Time `db:"timestamp"`
-	IsSitting      bool       `db:"is_sitting"`
-	Condition      string     `db:"condition"`
-	ConditionLevel string     `db:"condition_level"`
-	Message        string     `db:"message"`
+	IsuID          int       `db:"id"`
+	Name           string    `db:"name"`
+	Character      string    `db:"character"`
+	JIAIsuUUID     string    `db:"jia_isu_uuid"`
+	Timestamp      time.Time `db:"timestamp"`
+	IsSitting      bool      `db:"is_sitting"`
+	Condition      string    `db:"condition"`
+	ConditionLevel string    `db:"condition_level"`
+	Message        string    `db:"message"`
 }
 
 // POST /api/isu

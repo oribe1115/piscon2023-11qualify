@@ -370,7 +370,7 @@ func postInitialize(c echo.Context) error {
 
 	}
 
-	cacheIsuExist.Purge()
+	cacheIsu.Purge()
 
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
@@ -698,7 +698,7 @@ func postIsu(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	cacheIsuExist.Forget(jiaIsuUUID)
+	cacheIsu.Forget(jiaIsuUUID)
 
 	return c.JSON(http.StatusCreated, isu)
 }
@@ -1314,21 +1314,20 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 
 var errIsuNotFound = errors.New("isu not found")
 
-func retrieveIsuExist(_ context.Context, jiaIsuUUID string) (bool, error) {
-	var count int
-	err := db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+func retrieveIsu(_ context.Context, jiaIsuUUID string) (*Isu, error) {
+	var isu Isu
+	err := db.Get(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
-		return false, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errIsuNotFound
+		}
+		return nil, err
 	}
 
-	if count == 0 {
-		return false, errIsuNotFound
-	}
-
-	return true, nil
+	return &isu, nil
 }
 
-var cacheIsuExist = sc.NewMust[string, bool](retrieveIsuExist, 300*time.Hour, 300*time.Hour)
+var cacheIsu = sc.NewMust[string, *Isu](retrieveIsu, 300*time.Hour, 300*time.Hour)
 
 // POST /api/condition/:jia_isu_uuid
 // ISUからのコンディションを受け取る
@@ -1363,17 +1362,13 @@ func postIsuCondition(c echo.Context) error {
 	//	return c.String(http.StatusNotFound, "not found: isu")
 	//}
 
-	exist, err := cacheIsuExist.Get(context.Background(), jiaIsuUUID)
+	_, err = cacheIsu.Get(context.Background(), jiaIsuUUID)
 	if err != nil {
 		if errors.Is(err, errIsuNotFound) {
 			return c.String(http.StatusNotFound, "not found: isu")
 		}
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	if !exist {
-		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
 	//for _, cond := range req {

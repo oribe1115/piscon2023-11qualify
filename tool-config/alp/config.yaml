@@ -7,6 +7,24 @@ output: count,5xx,4xx,method,uri,min,max,sum,avg,p99                    # string
 # 必ず`^`と`&`を使った完全一致の記述を行うこと
 matching_groups:            # array
   - ^/initialize$
+  - ^/api/auth$
+  - ^/api/signout$
+  - ^/api/user/me$
+  - ^/api/isu$
+  - ^/api/isu/[\-0-9a-f]+$
+  - ^/api/isu/[\-0-9a-f]+/icon$
+  - ^/api/isu/[0-9a-f\-]+/graph$
+  - ^/api/isu/[\-0-9a-f]+/graph\?
+  - ^/api/condition/[\-0-9a-f]+$
+  - ^/api/condition/[\-0-9a-f]+\?
+  - ^/api/auth$
+  - ^/api/trend$
+  - ^/assets$
+  - ^/\?jwt
+  - ^/isu/
+  - ^/assets/
+  - ^/register$
+    #  - ^/[^a].+$
 
 
 # file:                       # string

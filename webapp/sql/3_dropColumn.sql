@@ -1,0 +1,1 @@
+ALTER TABLE isu DROP COLUMN image;

@@ -14,6 +14,7 @@ vars:
   DB_PATH: /etc/mysql
   NGINX_PATH: /etc/nginx
   SYSTEMD_PATH: /etc/systemd/system
+  LIMITS_PATH: /etc/security/limits.conf
 
   NGINX_LOG: /var/log/nginx/access.log
   DB_SLOW_LOG: /var/log/mysql/mysql-slow.log
@@ -182,6 +183,7 @@ tasks:
       - task: get-db-conf
       - task: get-nginx-conf
       - task: get-service-file
+      - task: get-kernel-file
       - task: get-env-file
   
   # 最初のインスタンスで実装をgitリポジトリに入れるために実行する
@@ -267,6 +269,13 @@ tasks:
       - sudo cp {{.SYSTEMD_PATH}}/{{.SERVICE_NAME}} ./$SERVER_ID/etc/systemd/system/{{.SERVICE_NAME}}
       - sudo chown {{.USER}} ./$SERVER_ID/etc/systemd/system/{{.SERVICE_NAME}}
   
+  get-kernel-file:
+    preconditions:
+      - task: check-server-id
+    cmds:
+      - sudo cp {{.LIMITS_PATH}} ./$SERVER_ID/etc/security/limits.conf
+      - sudo chown {{.USER}} ./$SERVER_ID/etc/security/limits.conf
+  
   get-env-file:
     preconditions:
       - task: check-server-id
@@ -280,6 +289,7 @@ tasks:
       - task: deploy-db-conf
       - task: deploy-nginx-conf
       - task: deploy-service-file
+      - task: deploy-kernel-file
       - task: deploy-envfile
 
   deploy-db-conf:
@@ -300,6 +310,12 @@ tasks:
     cmds:
       - sudo cp ./$SERVER_ID/etc/systemd/system/{{.SERVICE_NAME}} {{.SYSTEMD_PATH}}/{{.SERVICE_NAME}}
 
+  deploy-kernel-file:
+    preconditions:
+      - task: check-server-id
+    cmds:
+      - sudo cp ./$SERVER_ID/etc/security/limits.conf {{.LIMITS_PATH}}
+      
   deploy-envfile:
     preconditions:
       - task: check-server-id

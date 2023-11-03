@@ -692,9 +692,8 @@ func getIsuList(c echo.Context) error {
 	data := []IsuListDatum{}
 	query := "SELECT isu.id, isu.jia_isu_uuid, name, `character`, timestamp, is_sitting, message, COALESCE(`condition`, 'none') AS `condition` " +
 		"FROM isu " +
-		"LEFT OUTER JOIN isu_condition AS cond ON isu.jia_isu_uuid = cond.jia_isu_uuid " +
-		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, timestamp FROM latest_isu_condition) " +
-		"AND isu.jia_user_id = ? " +
+		"LEFT OUTER JOIN latest_isu_condition AS cond ON isu.jia_isu_uuid = cond.jia_isu_uuid " +
+		"WHERE isu.jia_user_id = ? " +
 		"ORDER BY isu.id DESC"
 
 	err = dbSelect(&data, query, jiaUserID)

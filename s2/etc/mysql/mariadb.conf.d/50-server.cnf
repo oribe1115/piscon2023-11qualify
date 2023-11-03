@@ -31,7 +31,7 @@ bind-address            = 0.0.0.0
 # * Fine Tuning
 #
 #key_buffer_size        = 16M
-max_allowed_packet      = 100M
+max_allowed_packet      = 50M
 #thread_stack           = 192K
 #thread_cache_size      = 8
 # This replaces the startup script and checks MyISAM tables if needed
@@ -81,9 +81,9 @@ expire_logs_days        = 10
 skip-log-bin
 skip-innodb-doublewrite
 # ディスクイメージをメモリ上にバッファさせる値をきめる設定値 (別鯖なら搭載メモリの80%くらい)
-innodb_buffer_pool_size = 2800MB
+innodb_buffer_pool_size = 2000MB
 # InnoDBの更新ログを記録するディスク上のファイルサイズ(innodb_buffer_pool_sizeの4分の1程度)
-innodb_log_file_size = 700MB
+innodb_log_file_size = 500MB
 # innoDBの更新ログを保持するメモリ(default: 8MB)、大量のデータの更新に効く
 innodb_log_buffer_size = 50MB
 # 1に設定するとトランザクション単位でログを出力するが 2 を指定すると1秒間に1回ログファイルに出力するようになる

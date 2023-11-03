@@ -736,16 +736,15 @@ func getIsuList(c echo.Context) error {
 }
 
 type IsuListDatum struct {
-	IsuID          int       `db:"id"`
-	Name           string    `db:"name"`
-	Character      string    `db:"character"`
-	JIAIsuUUID     string    `db:"jia_isu_uuid"`
-	Timestamp      time.Time `db:"timestamp"`
-	IsSitting      bool      `db:"is_sitting"`
-	Condition      string    `db:"condition"`
-	ConditionLevel string    `db:"condition_level"`
-	Message        string    `db:"message"`
-	CreatedAt      time.Time `db:"created_at"`
+	IsuID          int        `db:"id"`
+	Name           string     `db:"name"`
+	Character      string     `db:"character"`
+	JIAIsuUUID     string     `db:"jia_isu_uuid"`
+	Timestamp      *time.Time `db:"timestamp"`
+	IsSitting      bool       `db:"is_sitting"`
+	Condition      string     `db:"condition"`
+	ConditionLevel string     `db:"condition_level"`
+	Message        string     `db:"message"`
 }
 
 // POST /api/isu

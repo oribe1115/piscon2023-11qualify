@@ -370,6 +370,8 @@ func postInitialize(c echo.Context) error {
 
 	}
 
+	cacheIsuExist.Purge()
+
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
 	})

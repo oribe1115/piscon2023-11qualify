@@ -7,3 +7,19 @@
 
 tmp
 pprof
+fgprof
+
+webapp/rust/target/release
+webapp/ruby/.bundle
+webapp/nodejs/node_modules
+webapp/go/isucondition
+webapp/php/vendor
+webapp/php/composer.phar
+webapp/sql/1_InitData.sql
+
+bench
+bin
+go
+local
+
+env.sh

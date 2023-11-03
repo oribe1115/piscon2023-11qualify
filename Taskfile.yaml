@@ -3,10 +3,10 @@ version: '3'
 vars:
   # 問題に応じて設定する必要がある変数
   USER: isucon
-  BIN_NAME: 
-  BUILD_DIR: 
-  SERVICE_NAME:
-  ENV_FILE: .env
+  BIN_NAME: isucondition 
+  BUILD_DIR: /home/isucon/webapp/go
+  SERVICE_NAME: isucondition.go.service
+  ENV_FILE: env.sh
 
   GIT_REPOSITORY: git@github.com:oribe1115/piscon2023-11qualify.git
 
@@ -26,7 +26,7 @@ vars:
   DISCOCAT_TMPFILE: ~/tmp/discocat
 
 dotenv:
-  - "~/{{.ENV_FILE}}"
+  - "{{.ENV_FILE}}"
 
 tasks:
   bench:

@@ -1186,7 +1186,7 @@ func getTrendData() (*[]TrendResponse, error) {
 		"FROM isu_condition " +
 		"JOIN (SELECT id, jia_isu_uuid, `character` FROM isu) AS i ON i.jia_isu_uuid = isu_condition.jia_isu_uuid " +
 		"WHERE isu_condition.id IN (SELECT MAX(id) FROM isu_condition GROUP BY jia_isu_uuid) " +
-		"ORDER BY timestamp DESC"
+		"ORDER BY timestamp"
 	err = db.Select(&lastConditions, query)
 	if err != nil {
 		return nil, err

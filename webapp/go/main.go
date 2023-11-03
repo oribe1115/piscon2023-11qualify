@@ -358,8 +358,8 @@ func postInitialize(c echo.Context) error {
 		}
 
 		_, err = db.Exec(
-			"UPDATE `isu_condition` SET condition_level = ? WHERE id=?",
-			cLevel, cond.ID)
+			"UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?",
+			cLevel, cond.JIAIsuUUID, cond.Timestamp)
 		if err != nil {
 			c.Logger().Errorf("db error: %v", err)
 			return c.NoContent(http.StatusInternalServerError)

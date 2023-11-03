@@ -50,7 +50,7 @@ tasks:
   pprof:
     # desc: pprofで記録する
     env:
-      PPROF_TMPDIR: ~/pprof
+      PPROF_TMPDIR: /home/isucon/pprof
     cmds:
       - echo "pprof recording..." | discocat
       - go tool pprof -top http://localhost:6060/debug/pprof/profile
@@ -61,7 +61,7 @@ tasks:
   fgprof:
     # desc: fgprofで記録する
     env:
-      PPROF_TMPDIR: ~/fgprof
+      PPROF_TMPDIR: /home/isucon/fgprof
     cmds:
       - echo "fgprof recording..." | discocat
       - go tool pprof -top http://localhost:6060/debug/fgprof

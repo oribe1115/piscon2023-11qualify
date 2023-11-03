@@ -22,4 +22,6 @@ bin
 go
 local
 
+!webapp/go
+
 env.sh

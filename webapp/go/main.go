@@ -696,6 +696,8 @@ func postIsu(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	cacheIsuExist.Forget(jiaIsuUUID)
+
 	return c.JSON(http.StatusCreated, isu)
 }
 
@@ -1308,6 +1310,18 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	return struct{}{}, nil
 }, 0, 0, sc.EnableStrictCoalescing())
 
+func retrieveIsuExist(_ context.Context, jiaIsuUUID string) (bool, error) {
+	var count int
+	err := db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	if err != nil {
+		return false, err
+	}
+
+	return count != 0, nil
+}
+
+var cacheIsuExist = sc.NewMust[string, bool](retrieveIsuExist, 300*time.Hour, 300*time.Hour)
+
 // POST /api/condition/:jia_isu_uuid
 // ISUからのコンディションを受け取る
 func postIsuCondition(c echo.Context) error {
@@ -1331,13 +1345,23 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
-	var count int
-	err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	//var count int
+	//err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	//if err != nil {
+	//	c.Logger().Errorf("db error: %v", err)
+	//	return c.NoContent(http.StatusInternalServerError)
+	//}
+	//if count == 0 {
+	//	return c.String(http.StatusNotFound, "not found: isu")
+	//}
+
+	exist, err := cacheIsuExist.Get(context.Background(), jiaIsuUUID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	if count == 0 {
+
+	if !exist {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
 

@@ -37,4 +37,11 @@ CREATE TABLE `isu_association_config` (
   `url` VARCHAR(255) NOT NULL UNIQUE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
 
-CREATE VIEW `latest_isu_condition` AS SELECT * FROM isu_condition WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid);
+CREATE TABLE `latest_isu_condition` (
+	`jia_isu_uuid` CHAR(36) NOT NULL,
+	`timestamp` DATETIME NOT NULL,
+	`is_sitting` TINYINT(1) NOT NULL,
+	`condition` VARCHAR(255) NOT NULL,
+	`message` VARCHAR(255) NOT NULL,
+	PRIMARY KEY (`jia_isu_uuid`)
+  ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;

@@ -1043,10 +1043,28 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	conditions := []IsuCondition{}
 	var err error
 
+	var condition_level_query_builder strings.Builder
+	for _, level := range []string{conditionLevelInfo, conditionLevelWarning, conditionLevelCritical} {
+		if _, ok := conditionLevel[level]; !ok {
+			continue
+		}
+		if condition_level_query_builder.Len() == 0 {
+			condition_level_query_builder.WriteString(" AND (")
+		} else {
+			condition_level_query_builder.WriteString(" OR ")
+		}
+		condition_level_query_builder.WriteString("condition_level=")
+		condition_level_query_builder.WriteString(conditionLevelInfo)
+	}
+	if condition_level_query_builder.Len() != 0 {
+		condition_level_query_builder.WriteString(") ")
+	}
+
 	if startTime.IsZero() {
 		err = db.Select(&conditions,
 			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
+				condition_level_query_builder.String()+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
 			jiaIsuUUID, endTime, limit,
 		)
@@ -1055,6 +1073,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
+				condition_level_query_builder.String()+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
 			jiaIsuUUID, endTime, startTime, limit,
 		)
@@ -1245,7 +1264,7 @@ func postIsuCondition(c echo.Context) error {
 		_, err = tx.Exec(
 			"INSERT INTO `isu_condition`"+
 				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
-				"	VALUES (?, ?, ?, ?, ?)",
+				"	VALUES (?, ?, ?, ?, ?, ?)",
 			jiaIsuUUID, timestamp, cond.IsSitting, cond.Condition, cLevel, cond.Message)
 		if err != nil {
 			c.Logger().Errorf("db error: %v", err)

@@ -1590,5 +1590,6 @@ func isValidConditionFormat(conditionStr string) bool {
 }
 
 func getIndex(c echo.Context) error {
+	c.Response().Header().Add("Cache-Control", "public, max-age=86400")
 	return c.File(frontendContentsPath + "/index.html")
 }

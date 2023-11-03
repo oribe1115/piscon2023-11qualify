@@ -966,7 +966,7 @@ func generateIsuGraphResponse(jiaIsuUUID string, startTime time.Time) ([]GraphRe
 	var startTimeInThisHour time.Time
 	var conditions []IsuCondition
 
-	err := dbSelect("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
+	err := dbSelect(&conditions, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("db error: %v", err)
 	}

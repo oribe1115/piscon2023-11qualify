@@ -1312,6 +1312,8 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	return struct{}{}, nil
 }, 0, 0, sc.EnableStrictCoalescing())
 
+var errIsuNotFound = errors.New("isu not found")
+
 func retrieveIsuExist(_ context.Context, jiaIsuUUID string) (bool, error) {
 	var count int
 	err := db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
@@ -1319,7 +1321,11 @@ func retrieveIsuExist(_ context.Context, jiaIsuUUID string) (bool, error) {
 		return false, err
 	}
 
-	return count != 0, nil
+	if count == 0 {
+		return false, errIsuNotFound
+	}
+
+	return true, nil
 }
 
 var cacheIsuExist = sc.NewMust[string, bool](retrieveIsuExist, 300*time.Hour, 300*time.Hour)
@@ -1359,6 +1365,9 @@ func postIsuCondition(c echo.Context) error {
 
 	exist, err := cacheIsuExist.Get(context.Background(), jiaIsuUUID)
 	if err != nil {
+		if errors.Is(err, errIsuNotFound) {
+			return c.String(http.StatusNotFound, "not found: isu")
+		}
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}

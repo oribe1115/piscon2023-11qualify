@@ -10,14 +10,13 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	_ "net/http/pprof"
 
 	"github.com/felixge/fgprof"
 
@@ -218,7 +217,7 @@ func main() {
 
 	e := echo.New()
 	//e.Debug = true
-	e.Logger.SetLevel(log.OFF)
+	e.Logger.SetLevel(log.ERROR)
 
 	//e.Use(middleware.Logger())
 	e.Use(middleware.Recover())

@@ -19,9 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/motoki317/sc"
 
 	"github.com/dgrijalva/jwt-go"
@@ -1327,15 +1324,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	}
 
 	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	var eg errgroup.Group
-	for _, batch := range lo.Chunk(toInsert, 10000) {
-		batch := batch
-		eg.Go(func() error {
-			_, err := db.NamedExec(query, batch)
-			return err
-		})
-	}
-	err := eg.Wait()
+	_, err := db.NamedExec(query, toInsert)
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)
 		return struct{}{}, err
@@ -1451,6 +1440,9 @@ func postIsuCondition(c echo.Context) error {
 	go func() {
 		conditionsLock.Lock()
 		conditionsQueue = append(conditionsQueue, data...)
+		if len(conditionsQueue) > 10000 {
+			insertConditionThrottler.Purge() // immediately initiate next call
+		}
 		conditionsLock.Unlock()
 		_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
 	}()

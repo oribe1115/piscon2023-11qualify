@@ -222,9 +222,9 @@ const benchtime = (60 + 20 + 60) * time.Second
 
 func main() {
 	//http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
-	go func() {
-		log.Fatal(http.ListenAndServe(":6060", nil))
-	}()
+	// go func() {
+	// 	log.Fatal(http.ListenAndServe(":6060", nil))
+	// }()
 
 	e := echo.New()
 	//e.Debug = true

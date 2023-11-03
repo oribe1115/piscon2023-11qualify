@@ -1348,7 +1348,7 @@ func getTrend(c echo.Context) error {
 	return c.JSONBlob(http.StatusOK, jsonEncode(res))
 }
 
-var trendDataCache = sc.NewMust(getTrendData, 500*time.Millisecond, 500*time.Millisecond)
+var trendDataCache = sc.NewMust(getTrendData, 0, 500*time.Millisecond)
 
 func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	characterList := []Isu{}

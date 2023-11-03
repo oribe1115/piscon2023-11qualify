@@ -77,13 +77,13 @@ tasks:
 
   kill-pprof:
     status:
-      - sh -c "! sudo lsof -t -i :8090"
-    cmd: sudo lsof -t -i :8090 | xargs sudo kill -9
+      - sh -c "! sudo lsof -sTCP:LISTEN -i :8090"
+    cmd: sudo lsof -sTCP:LISTEN -t -i :8090 | xargs sudo kill -9
 
   kill-fgprof:
     status:
-      - sh -c "! sudo lsof -i :9090"
-    cmd: sudo lsof -t -i :9090 | xargs sudo kill -9
+      - sh -c "! sudo lsof -sTCP:LISTEN -i :9090"
+    cmd: sudo lsof -sTCP:LISTEN -t -i :9090 | xargs sudo kill -9
 
   pprof-check:
     # desc: pprofでの最新データを確認する

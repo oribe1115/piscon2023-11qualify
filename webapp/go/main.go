@@ -1484,23 +1484,16 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		return struct{}{}, nil
 	}
 
-	var err error
-	if len(toInsert) < 5000 {
-		query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-		_, err = db.NamedExec(query, toInsert)
-	} else {
-		var stmt *sqlx.Stmt
-		stmt, err = stmtBulkinsertCache.Get(context.Background(), len(toInsert))
-		if err != nil {
-			log.Errorf("condition batch insert(stmt) db error: %v\n", err)
-			return struct{}{}, err
-		}
-		args := make([]interface{}, 0, len(toInsert)*6)
-		for _, cond := range toInsert {
-			args = append(args, cond.JiaIsuUUID, cond.Timestamp, cond.IsSitting, cond.Condition, cond.ConditionLevel, cond.Message)
-		}
-		_, err = stmt.Exec(args...)
+	stmt, err := stmtBulkinsertCache.Get(context.Background(), len(toInsert))
+	if err != nil {
+		log.Errorf("condition batch insert(stmt) db error: %v\n", err)
+		return struct{}{}, err
 	}
+	args := make([]interface{}, 0, len(toInsert)*6)
+	for _, cond := range toInsert {
+		args = append(args, cond.JiaIsuUUID, cond.Timestamp, cond.IsSitting, cond.Condition, cond.ConditionLevel, cond.Message)
+	}
+	_, err = stmt.Exec(args...)
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)
 		return struct{}{}, err

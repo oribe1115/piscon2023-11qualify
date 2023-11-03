@@ -356,7 +356,7 @@ tasks:
   watch-service-log:
     desc: アプリのログを見る
     cmds:
-      - sudo journalctl -u {{.SERVICE_NAME}} -n10 -f
+      - sudo journalctl -u {{.SERVICE_NAME}} -n20 -f
 
   check-commit:
     cmds:

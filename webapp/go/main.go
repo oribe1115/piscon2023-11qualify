@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -268,6 +269,15 @@ func main() {
 	e.Logger.Fatal(e.Start(serverPort))
 }
 
+func jsonEncode(res any) []byte {
+	b, err := sonic.Marshal(&res)
+	if err != nil {
+		panic(err)
+	}
+
+	return b
+}
+
 func getSession(r *http.Request) (*sessions.Session, error) {
 	session, err := sessionStore.Get(r, sessionName)
 	if err != nil {
@@ -321,9 +331,9 @@ func postInitialize(c echo.Context) error {
 	if os.Getenv("SERVER_ID") == "s3" {
 		cacheIsu.Purge()
 
-		return c.JSON(http.StatusOK, InitializeResponse{
+		return c.JSONBlob(http.StatusOK, jsonEncode(InitializeResponse{
 			Language: "go",
-		})
+		}))
 	}
 
 	var request InitializeRequest
@@ -403,9 +413,9 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, InitializeResponse{
+	return c.JSONBlob(http.StatusOK, jsonEncode(InitializeResponse{
 		Language: "go",
-	})
+	}))
 }
 
 // POST /api/auth
@@ -508,7 +518,7 @@ func getMe(c echo.Context) error {
 	}
 
 	res := GetMeResponse{JIAUserID: jiaUserID}
-	return c.JSON(http.StatusOK, res)
+	return c.JSONBlob(http.StatusOK, jsonEncode(res))
 }
 
 // GET /api/isu
@@ -590,7 +600,7 @@ func getIsuList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, responseList)
+	return c.JSONBlob(http.StatusOK, jsonEncode(responseList))
 }
 
 // POST /api/isu
@@ -731,7 +741,7 @@ func postIsu(c echo.Context) error {
 
 	cacheIsu.Forget(jiaIsuUUID)
 
-	return c.JSON(http.StatusCreated, isu)
+	return c.JSONBlob(http.StatusCreated, jsonEncode(isu))
 }
 
 // GET /api/isu/:jia_isu_uuid
@@ -775,7 +785,7 @@ func getIsuID(c echo.Context) error {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
-	return c.JSON(http.StatusOK, res)
+	return c.JSONBlob(http.StatusOK, jsonEncode(res))
 }
 
 // GET /api/isu/:jia_isu_uuid/icon
@@ -890,7 +900,7 @@ func getIsuGraph(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, res)
+	return c.JSONBlob(http.StatusOK, jsonEncode(res))
 }
 
 // グラフのデータ点を一日分生成
@@ -1119,7 +1129,7 @@ func getIsuConditions(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	return c.JSON(http.StatusOK, conditionsResponse)
+	return c.JSONBlob(http.StatusOK, jsonEncode(conditionsResponse))
 }
 
 // ISUのコンディションをDBから取得
@@ -1294,7 +1304,7 @@ func getTrend(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, res)
+	return c.JSONBlob(http.StatusOK, jsonEncode(res))
 }
 
 var trendDataCache = sc.NewMust(getTrendData, 500*time.Millisecond, 500*time.Millisecond)

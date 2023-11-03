@@ -649,7 +649,7 @@ func getIsuList(c echo.Context) error {
 
 	query := "SELECT * FROM `isu_condition` WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition WHERE jia_isu_uuid IN (?) GROUP BY jia_isu_uuid)"
 	jiaIsuIDs := lo.Map(isuList, func(isu Isu, _ int) any { return isu.JIAIsuUUID })
-	query, args, err := sqlx.In(query, jiaIsuIDs...)
+	query, args, err := sqlx.In(query, jiaIsuIDs)
 	if err != nil {
 		c.Logger().Errorf("sqlx.In error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)

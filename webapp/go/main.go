@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -1287,12 +1289,25 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	conditionsQueue = make([]*conditionInsertDatum, 0, len(toInsert))
 	conditionsLock.Unlock()
 
+	if len(toInsert) == 0 {
+		return struct{}{}, nil
+	}
+
 	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	_, err := db.NamedExec(query, toInsert)
+	var eg errgroup.Group
+	for _, batch := range lo.Chunk(toInsert, 10000) {
+		batch := batch
+		eg.Go(func() error {
+			_, err := db.NamedExec(query, batch)
+			return err
+		})
+	}
+	err := eg.Wait()
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)
+		return struct{}{}, err
 	}
-	return struct{}{}, err
+	return struct{}{}, nil
 }, 0, 0, sc.EnableStrictCoalescing())
 
 // POST /api/condition/:jia_isu_uuid

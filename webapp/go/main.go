@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bytedance/sonic"
+	"github.com/samber/lo"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -262,8 +263,8 @@ func main() {
 		e.Logger.Fatalf("failed to connect db: %v", err)
 		return
 	}
-	db.SetMaxIdleConns(650)
-	db.SetMaxOpenConns(650)
+	db.SetMaxIdleConns(100)
+	db.SetMaxOpenConns(100)
 	defer db.Close()
 
 	tmpTime := &time.Time{}
@@ -348,6 +349,25 @@ func getSession(r *http.Request) (*sessions.Session, error) {
 	return session, nil
 }
 
+var errUserNotFound = errors.New("user not found")
+
+func retrieveUserExist(_ context.Context, jiaUserID string) (bool, error) {
+	var count int
+	err := dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+		jiaUserID)
+	if err != nil {
+		return false, err
+	}
+
+	if count == 0 {
+		return false, errUserNotFound
+	}
+
+	return true, nil
+}
+
+var cacheUserExist = sc.NewMust[string, bool](retrieveUserExist, 300*time.Hour, 300*time.Hour)
+
 func getUserIDFromSession(c echo.Context) (string, int, error) {
 	session, err := getSession(c.Request())
 	if err != nil {
@@ -359,15 +379,28 @@ func getUserIDFromSession(c echo.Context) (string, int, error) {
 	}
 
 	jiaUserID := _jiaUserID.(string)
-	var count int
+	//var count int
+	//
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+	//	jiaUserID)
+	//if err != nil {
+	//	return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
+	//}
+	//
+	//if count == 0 {
+	//	return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
+	//}
 
-	err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
-		jiaUserID)
+	exist, err := cacheUserExist.Get(context.Background(), jiaUserID)
 	if err != nil {
+		if errors.Is(err, errUserNotFound) {
+			return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
+		}
+
 		return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
 	}
 
-	if count == 0 {
+	if !exist {
 		return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
 	}
 
@@ -393,6 +426,8 @@ func postInitialize(c echo.Context) error {
 	tmpTime := &time.Time{}
 	*tmpTime = time.Now()
 	benchstart.Store(tmpTime)
+
+	cacheUserExist.Purge()
 
 	if os.Getenv("SERVER_ID") == "s3" {
 		cacheIsu.Purge()
@@ -519,11 +554,13 @@ func postAuthentication(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "invalid JWT payload")
 	}
 
-	_, err = dbExec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
+	_, err = dbExec("INSERT IGNORE INTO `user` (`jia_user_id`) VALUES (?)", jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+
+	cacheUserExist.Forget(jiaUserID)
 
 	session, err := getSession(c.Request())
 	if err != nil {
@@ -610,23 +647,29 @@ func getIsuList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	var conditions []*IsuCondition
+	if len(isuList) > 0 {
+		query := "SELECT * FROM `isu_condition` WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition WHERE jia_isu_uuid IN (?) GROUP BY jia_isu_uuid)"
+		jiaIsuIDs := lo.Map(isuList, func(isu Isu, _ int) any { return isu.JIAIsuUUID })
+		query, args, err := sqlx.In(query, jiaIsuIDs)
+		if err != nil {
+			c.Logger().Errorf("sqlx.In error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		err = db.Select(&conditions, query, args...)
+		if err != nil {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+	conditionsMap := lo.SliceToMap(conditions, func(c *IsuCondition) (string, *IsuCondition) { return c.JIAIsuUUID, c })
+
 	responseList := []GetIsuListResponse{}
 	for _, isu := range isuList {
-		var lastCondition IsuCondition
-		foundLastCondition := true
-		err = dbGet(&lastCondition, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` DESC LIMIT 1",
-			isu.JIAIsuUUID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				foundLastCondition = false
-			} else {
-				c.Logger().Errorf("db error: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-		}
+		lastCondition, ok := conditionsMap[isu.JIAIsuUUID]
 
 		var formattedCondition *GetIsuConditionResponse
-		if foundLastCondition {
+		if ok {
 			conditionLevel, err := calculateConditionLevel(lastCondition.Condition)
 			if err != nil {
 				c.Logger().Error(err)

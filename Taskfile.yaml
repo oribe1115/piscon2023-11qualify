@@ -437,3 +437,7 @@ tasks:
     cmds:
       - echo "" >> ~/{{.ENV_FILE}}
       - echo "SERVER_ID={{.NEW_SERVER_ID}}" >> ~/{{.ENV_FILE}}
+
+  dool:
+    cmds:
+      - dool --cpu --mem  --disk --net --proc --io

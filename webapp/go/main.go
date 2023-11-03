@@ -696,7 +696,7 @@ func getIsuList(c echo.Context) error {
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"AND isu.jia_user_id = ?"
 
-	err = dbGet(&data, query, jiaUserID)
+	err = dbSelect(&data, query, jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)

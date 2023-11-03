@@ -303,12 +303,20 @@ func jsonEncode(res any) []byte {
 	return b
 }
 
+func stmtClose(stmt *sqlx.Stmt) {
+	_ = stmt.Close()
+}
+
+func namedStmtClose(stmt *sqlx.NamedStmt) {
+	_ = stmt.Close()
+}
+
 var stmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
 	stmt, err := db.PreparexContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	runtime.SetFinalizer(stmt, stmt.Close)
+	runtime.SetFinalizer(stmt, stmtClose)
 	return stmt, nil
 }, 90*time.Second, 90*time.Second)
 
@@ -341,7 +349,7 @@ var namedStmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.N
 	if err != nil {
 		return nil, err
 	}
-	runtime.SetFinalizer(stmt, stmt.Close)
+	runtime.SetFinalizer(stmt, namedStmtClose)
 	return stmt, nil
 }, 90*time.Second, 90*time.Second)
 

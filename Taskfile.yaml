@@ -108,7 +108,8 @@ tasks:
   slow-query:
     # desc: slow queryの分析結果を出力する
     cmds:
-      - sudo pt-query-digest --filter 'length($event->{arg}) <= 2000' {{.DB_SLOW_LOG}}
+      - sudo pt-query-digest {{.DB_SLOW_LOG}}
+#      - sudo pt-query-digest --filter 'length($event->{arg}) <= 2000' {{.DB_SLOW_LOG}}
 
   alp:
     # desc: alpでの分析結果を出力する

@@ -5,7 +5,7 @@ After=network.target mysql.service cloud-config.service
 [Service]
 WorkingDirectory=/home/isucon/webapp/go
 EnvironmentFile=/home/isucon/env.sh
-
+LimitNOFILE=1006500
 User=isucon
 Group=isucon
 ExecStart=/home/isucon/webapp/go/isucondition

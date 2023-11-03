@@ -89,10 +89,9 @@
       class="netdata-container-with-legend netdata-container-with-legend--bottom"
     ></div>
 
-    <h2>Systemd Service</h2>
-    <!-- systemd serviceの時系列メトリクス -->
+    <h2>Per User</h2>
     <div
-      data-netdata="services.cpu"
+      data-netdata="user.cpu_utilization"
       data-chart-library="dygraph"
       data-height="250"
       data-decimal-digits="-1"
@@ -101,13 +100,53 @@
       class="netdata-container-with-legend netdata-container-with-legend--bottom"
     ></div>
     <div
+      data-netdata="user.mem_usage"
+      data-chart-library="dygraph"
+      data-height="250"
+      data-decimal-digits="-1"
+      data-dygraph-valuerange="[0, 100]"
+      data-legend-position="bottom"
+      class="netdata-container-with-legend netdata-container-with-legend--bottom"
+    ></div>
+    <div
+      data-netdata="user.disk_logical_io"
+      data-chart-library="dygraph"
+      data-height="250"
+      data-decimal-digits="-1"
+      data-dygraph-valuerange="[0, 100]"
+      data-legend-position="bottom"
+      class="netdata-container-with-legend netdata-container-with-legend--bottom"
+    ></div>
+
+    <h2>Systemd Service</h2>
+    <!-- systemd serviceの時系列メトリクス -->
+    <!-- <div
+      data-netdata="services.cpu"
+      data-chart-library="dygraph"
+      data-height="250"
+      data-decimal-digits="-1"
+      data-dygraph-valuerange="[0, 100]"
+      data-legend-position="bottom"
+      class="netdata-container-with-legend netdata-container-with-legend--bottom"
+    ></div> -->
+
+    <!-- <div
       data-netdata="services.mem_usage"
       data-chart-library="dygraph"
       data-height="250"
       data-decimal-digits="-1"
       data-legend-position="bottom"
       class="netdata-container-with-legend netdata-container-with-legend--bottom"
+    ></div> -->
+    <!-- <div
+      data-netdata="systemd.service.memory.usage"
+      data-chart-library="dygraph"
+      data-height="250"
+      data-decimal-digits="-1"
+      data-legend-position="bottom"
+      class="netdata-container-with-legend netdata-container-with-legend--bottom"
     ></div>
+
     <div
       data-netdata="services.throttle_io_ops_write"
       data-chart-library="dygraph"
@@ -121,7 +160,7 @@
       data-height="200"
       data-legend-position="bottom"
       class="netdata-container-with-legend netdata-container-with-legend--bottom"
-    ></div>
+    ></div> -->
 
     <h2>System</h2>
     <div

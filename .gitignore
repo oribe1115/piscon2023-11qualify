@@ -25,3 +25,6 @@ local
 !webapp/go
 
 env.sh
+!s1/home/isucon/env.sh
+!s2/home/isucon/env.sh
+!s3/home/isucon/env.sh

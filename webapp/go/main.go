@@ -1485,7 +1485,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	}
 
 	var err error
-	if len(toInsert) < 10000 {
+	if len(toInsert) < 5000 {
 		query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
 		_, err = db.NamedExec(query, toInsert)
 	} else {

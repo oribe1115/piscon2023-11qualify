@@ -364,6 +364,25 @@ func getSession(r *http.Request) (*sessions.Session, error) {
 	return session, nil
 }
 
+var errUserNotFound = errors.New("user not found")
+
+func retrieveUserExist(_ context.Context, jiaUserID string) (bool, error) {
+	var count int
+	err := dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+		jiaUserID)
+	if err != nil {
+		return false, err
+	}
+
+	if count == 0 {
+		return false, errUserNotFound
+	}
+
+	return true, nil
+}
+
+var cacheUserExist = sc.NewMust[string, bool](retrieveUserExist, 300*time.Hour, 300*time.Hour)
+
 func getUserIDFromSession(c echo.Context) (string, int, error) {
 	session, err := getSession(c.Request())
 	if err != nil {
@@ -375,15 +394,28 @@ func getUserIDFromSession(c echo.Context) (string, int, error) {
 	}
 
 	jiaUserID := _jiaUserID.(string)
-	var count int
+	//var count int
+	//
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+	//	jiaUserID)
+	//if err != nil {
+	//	return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
+	//}
+	//
+	//if count == 0 {
+	//	return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
+	//}
 
-	err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
-		jiaUserID)
+	exist, err := cacheUserExist.Get(context.Background(), jiaUserID)
 	if err != nil {
+		if errors.Is(err, errUserNotFound) {
+			return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
+		}
+
 		return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
 	}
 
-	if count == 0 {
+	if !exist {
 		return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
 	}
 
@@ -409,6 +441,8 @@ func postInitialize(c echo.Context) error {
 	tmpTime := &time.Time{}
 	*tmpTime = time.Now()
 	benchstart.Store(tmpTime)
+
+	cacheUserExist.Purge()
 
 	if os.Getenv("SERVER_ID") == "s3" {
 		cacheIsu.Purge()
@@ -535,11 +569,13 @@ func postAuthentication(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "invalid JWT payload")
 	}
 
-	_, err = dbExec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
+	_, err = dbExec("INSERT IGNORE INTO `user` (`jia_user_id`) VALUES (?)", jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+
+	cacheUserExist.Forget(jiaUserID)
 
 	session, err := getSession(c.Request())
 	if err != nil {

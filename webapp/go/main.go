@@ -1043,22 +1043,16 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	var err error
 
 	var condition_level_query_builder strings.Builder
+	condition_level_query_builder.WriteString(" AND (FALSE")
 	for _, level := range []string{conditionLevelInfo, conditionLevelWarning, conditionLevelCritical} {
 		if _, ok := conditionLevel[level]; !ok {
 			continue
 		}
-		if condition_level_query_builder.Len() == 0 {
-			condition_level_query_builder.WriteString(" AND (")
-		} else {
-			condition_level_query_builder.WriteString(" OR ")
-		}
-		condition_level_query_builder.WriteString("`condition_level`='")
+		condition_level_query_builder.WriteString(" OR `condition_level`='")
 		condition_level_query_builder.WriteString(level)
 		condition_level_query_builder.WriteString("'")
 	}
-	if condition_level_query_builder.Len() != 0 {
-		condition_level_query_builder.WriteString(") ")
-	}
+	condition_level_query_builder.WriteString(") ")
 
 	if startTime.IsZero() {
 		err = db.Select(&conditions,

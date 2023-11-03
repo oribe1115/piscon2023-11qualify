@@ -1215,12 +1215,9 @@ func getTrendData() (*[]TrendResponse, error) {
 	}
 
 	lastConditions := []latestConditionData{}
-	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` " +
-		"FROM isu_condition " +
-		"JOIN (SELECT id, jia_isu_uuid, `character` FROM isu) AS i ON i.jia_isu_uuid = isu_condition.jia_isu_uuid " +
-		"WHERE isu_condition.id = (SELECT sub.id FROM isu_condition AS sub " +
-		"  WHERE isu_condition.jia_isu_uuid = sub.jia_isu_uuid " +
-		"  ORDER BY sub.timestamp DESC LIMIT 1)" +
+	query := "SELECT * FROM isu_condition AS cond " +
+		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
+		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"
 	err = db.Select(&lastConditions, query)
 	if err != nil {

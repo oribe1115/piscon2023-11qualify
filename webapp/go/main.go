@@ -1233,16 +1233,18 @@ func getTrend(c echo.Context) error {
 	//		})
 	//}
 
-	res, err := getTrendData()
+	res, err := trendDataCache.Get(context.Background(), struct{}{})
 	if err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, *res)
+	return c.JSON(http.StatusOK, res)
 }
 
-func getTrendData() (*[]TrendResponse, error) {
+var trendDataCache = sc.NewMust(getTrendData, 500*time.Millisecond, 500*time.Millisecond)
+
+func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	characterList := []Isu{}
 	err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	if err != nil {
@@ -1250,14 +1252,14 @@ func getTrendData() (*[]TrendResponse, error) {
 	}
 
 	type latestConditionData struct {
-		IsuId     int       `db:"isu_id"`
-		Character string    `db:"character"`
-		Timestamp time.Time `db:"timestamp"`
-		Condition string    `db:"condition"`
+		IsuId          int       `db:"isu_id"`
+		Character      string    `db:"character"`
+		Timestamp      time.Time `db:"timestamp"`
+		ConditionLevel string    `db:"condition_level"`
 	}
 
 	lastConditions := []latestConditionData{}
-	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` FROM isu_condition AS cond " +
+	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition_level` FROM isu_condition AS cond " +
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"
@@ -1277,34 +1279,29 @@ func getTrendData() (*[]TrendResponse, error) {
 	}
 
 	for _, condition := range lastConditions {
-		conditionLevel, err := calculateConditionLevel(condition.Condition)
-		if err != nil {
-			return nil, err
-		}
-
 		trendCondition := &TrendCondition{
 			ID:        condition.IsuId,
 			Timestamp: condition.Timestamp.Unix(),
 		}
 
 		res := perCharacter[condition.Character]
-		switch conditionLevel {
-		case "info":
+		switch condition.ConditionLevel {
+		case conditionLevelInfo:
 			res.Info = append(res.Info, trendCondition)
-		case "warning":
+		case conditionLevelWarning:
 			res.Warning = append(res.Warning, trendCondition)
-		case "critical":
+		case conditionLevelCritical:
 			res.Critical = append(res.Critical, trendCondition)
 		}
 	}
 
-	responses := make([]TrendResponse, 0)
+	responses := make([]*TrendResponse, 0, len(characterList))
 	for _, character := range characterList {
 		res := perCharacter[character.Character]
-		responses = append(responses, *res)
+		responses = append(responses, res)
 	}
 
-	return &responses, nil
+	return responses, nil
 }
 
 type conditionInsertDatum struct {

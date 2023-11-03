@@ -174,9 +174,9 @@ tasks:
     cmds:
       - git config --global init.defaultBranch main
       - git init
-      - git branch -m main
       - git remote add origin {{.GIT_REPOSITORY}}
       - git pull origin main
+      - git branch -m main
       - echo "Setup gitignore and variables in Taskfile.yaml"
   
   # 2代目の以降のインスタンスでのgitのセットアップ
@@ -184,12 +184,12 @@ tasks:
     cmds:
       - git config --global init.defaultBranch main
       - git init
-      - git branch -m main
       - git remote add origin {{.GIT_REPOSITORY}}
       - cmd: git pull origin main
         ignore_error: true
       - git fetch origin main
       - git reset --hard FETCH_HEAD
+      - git branch -m main
 
   # 本番中直接実行しないもの ---------
   install-tools:

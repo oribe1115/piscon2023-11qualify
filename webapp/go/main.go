@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/motoki317/sc"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/felixge/fgprof"
@@ -1266,6 +1269,32 @@ func getTrendData() (*[]TrendResponse, error) {
 	return &responses, nil
 }
 
+type conditionInsertDatum struct {
+	JiaIsuUUID     string    `db:"jia_isu_uuid"`
+	Timestamp      time.Time `db:"timestamp"`
+	IsSitting      bool      `db:"is_sitting"`
+	Condition      string    `db:"condition"`
+	ConditionLevel string    `db:"condition_level"`
+	Message        string    `db:"message"`
+}
+
+var conditionsLock sync.Mutex
+var conditionsQueue []*conditionInsertDatum
+
+var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) (struct{}, error) {
+	conditionsLock.Lock()
+	toInsert := conditionsQueue
+	conditionsQueue = make([]*conditionInsertDatum, 0, len(toInsert))
+	conditionsLock.Unlock()
+
+	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
+	_, err := db.NamedExec(query, toInsert)
+	if err != nil {
+		log.Errorf("condition batch insert db error: %v\n", err)
+	}
+	return struct{}{}, err
+}, 0, 0, sc.EnableStrictCoalescing())
+
 // POST /api/condition/:jia_isu_uuid
 // ISUからのコンディションを受け取る
 func postIsuCondition(c echo.Context) error {
@@ -1288,13 +1317,6 @@ func postIsuCondition(c echo.Context) error {
 	} else if len(req) == 0 {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
-
-	//tx, err := db.Beginx()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	//defer tx.Rollback()
 
 	var count int
 	err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
@@ -1325,16 +1347,7 @@ func postIsuCondition(c echo.Context) error {
 	//
 	//}
 
-	type datum struct {
-		JiaIsuUUID     string    `db:"jia_isu_uuid"`
-		Timestamp      time.Time `db:"timestamp"`
-		IsSitting      bool      `db:"is_sitting"`
-		Condition      string    `db:"condition"`
-		ConditionLevel string    `db:"condition_level"`
-		Message        string    `db:"message"`
-	}
-
-	data := make([]datum, 0)
+	data := make([]*conditionInsertDatum, 0, len(req))
 	for _, cond := range req {
 		timestamp := time.Unix(cond.Timestamp, 0)
 
@@ -1346,7 +1359,7 @@ func postIsuCondition(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
-		data = append(data, datum{
+		data = append(data, &conditionInsertDatum{
 			JiaIsuUUID:     jiaIsuUUID,
 			Timestamp:      timestamp,
 			IsSitting:      cond.IsSitting,
@@ -1354,24 +1367,14 @@ func postIsuCondition(c echo.Context) error {
 			ConditionLevel: cLevel,
 			Message:        cond.Message,
 		})
-
 	}
 
-	query := "INSERT INTO `isu_condition`" +
-		"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)" +
-		"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-
-	_, err = db.NamedExec(query, data)
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	//err = tx.Commit()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	go func() {
+		conditionsLock.Lock()
+		conditionsQueue = append(conditionsQueue, data...)
+		conditionsLock.Unlock()
+		_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
+	}()
 
 	return c.NoContent(http.StatusAccepted)
 }

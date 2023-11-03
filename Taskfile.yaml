@@ -342,6 +342,7 @@ tasks:
       - sudo systemctl restart nginx
 
   watch-service-log:
+    desc: アプリのログを見る
     cmds:
       - sudo journalctl -u {{.SERVICE_NAME}} -n10 -f
 

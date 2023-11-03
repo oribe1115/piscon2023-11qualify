@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bytedance/sonic"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/bytedance/sonic"
 
 	"github.com/motoki317/sc"
 
@@ -339,6 +340,21 @@ func dbSelect(dest interface{}, query string, args ...interface{}) error {
 	}
 	return stmt.Select(dest, args...)
 }
+
+var stmtBulkinsertCache = sc.NewMust(func(ctx context.Context, querySize int) (*sqlx.Stmt, error) {
+	querybuilder := strings.Builder{}
+	querybuilder.WriteString("INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES")
+	querybuilder.WriteString("(?,?,?,?,?,?)")
+	for i := 1; i < querySize; i += 1 {
+		querybuilder.WriteString(",(?,?,?,?,?,?)")
+	}
+	stmt, err := db.PreparexContext(ctx, querybuilder.String())
+	if err != nil {
+		return nil, err
+	}
+	runtime.SetFinalizer(stmt, stmtClose)
+	return stmt, nil
+}, 90*time.Second, 90*time.Second)
 
 func getSession(r *http.Request) (*sessions.Session, error) {
 	session, err := sessionStore.Get(r, sessionName)
@@ -1432,8 +1448,22 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		return struct{}{}, nil
 	}
 
-	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	_, err := db.NamedExec(query, toInsert)
+	var err error
+	if len(toInsert) < 10000 {
+		query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
+		_, err = db.NamedExec(query, toInsert)
+	} else {
+		var stmt *sqlx.Stmt
+		stmt, err = stmtBulkinsertCache.Get(context.Background(), len(toInsert))
+		if err != nil {
+			return struct{}{}, err
+		}
+		args := make([]interface{}, 0, len(toInsert)*6)
+		for _, cond := range toInsert {
+			args = append(args, cond.JiaIsuUUID, cond.Timestamp, cond.IsSitting, cond.Condition, cond.ConditionLevel, cond.Message)
+		}
+		_, err = stmt.Exec(args)
+	}
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)
 		return struct{}{}, err

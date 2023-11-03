@@ -341,8 +341,8 @@ func postInitialize(c echo.Context) error {
 		}
 		defer res.Body.Close()
 
-		if res.StatusCode != http.StatusAccepted {
-			reciver_err <- fmt.Errorf("JIAService returned error: status code %v", res.StatusCode)
+		if res.StatusCode != http.StatusOK {
+			reciver_err <- fmt.Errorf("Initialize returned error: status code %v", res.StatusCode)
 			return
 		}
 	}()

@@ -8,18 +8,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/motoki317/sc"
 
@@ -319,57 +319,6 @@ func getJIAServiceURL(tx *sqlx.Tx) string {
 // POST /initialize
 // サービスを初期化
 func postInitialize(c echo.Context) error {
-	var request InitializeRequest
-	err := c.Bind(&request)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "bad request body")
-	}
-
-	cmd := exec.Command("../sql/init.sh")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		c.Logger().Errorf("exec init.sh error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	_, err = db.Exec(
-		"INSERT INTO `isu_association_config` (`name`, `url`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `url` = VALUES(`url`)",
-		"jia_service_url",
-		request.JIAServiceURL,
-	)
-	if err != nil {
-		c.Logger().Errorf("db error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	//condition_level
-	conditions := []IsuCondition{}
-	db.Select(&conditions, "SELECT * FROM `isu_condition`")
-	if err != nil {
-		c.Logger().Errorf("db error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	for _, cond := range conditions {
-		if !isValidConditionFormat(cond.Condition) {
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		cLevel, err := calculateConditionLevel(cond.Condition)
-		if err != nil {
-			return c.String(http.StatusBadRequest, "bad request body")
-		}
-
-		_, err = db.Exec(
-			"UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?",
-			cLevel, cond.JIAIsuUUID, cond.Timestamp)
-		if err != nil {
-			c.Logger().Errorf("db error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-
-	}
-
 	cacheIsuExist.Purge()
 
 	return c.JSON(http.StatusOK, InitializeResponse{

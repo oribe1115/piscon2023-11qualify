@@ -1,8 +1,9 @@
-MYSQL_HOST="127.0.0.1"
+SERVER_APP_PORT=80
+MYSQL_HOST="172.31.38.27"
 MYSQL_PORT=3306
 MYSQL_USER=isucon
 MYSQL_DBNAME=isucondition
 MYSQL_PASS=isucon
-POST_ISUCONDITION_TARGET_BASE_URL="https://isucondition-1.t.isucon.dev"
+POST_ISUCONDITION_TARGET_BASE_URL="http://isucondition-3.t.isucon.dev"
 
 SERVER_ID=s3

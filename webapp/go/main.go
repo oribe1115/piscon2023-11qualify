@@ -1215,7 +1215,7 @@ func getTrendData() (*[]TrendResponse, error) {
 	}
 
 	lastConditions := []latestConditionData{}
-	query := "SELECT * FROM isu_condition AS cond " +
+	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` FROM isu_condition AS cond " +
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"

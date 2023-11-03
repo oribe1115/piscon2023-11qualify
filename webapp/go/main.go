@@ -1492,6 +1492,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		var stmt *sqlx.Stmt
 		stmt, err = stmtBulkinsertCache.Get(context.Background(), len(toInsert))
 		if err != nil {
+			log.Errorf("condition batch insert(stmt) db error: %v\n", err)
 			return struct{}{}, err
 		}
 		args := make([]interface{}, 0, len(toInsert)*6)

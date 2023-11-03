@@ -656,7 +656,7 @@ func getIsuList(c echo.Context) error {
 			c.Logger().Errorf("sqlx.In error: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		err = dbSelect(&conditions, query, args...)
+		err = db.Select(&conditions, query, args...)
 		if err != nil {
 			c.Logger().Errorf("db error: %v", err)
 			return c.NoContent(http.StatusInternalServerError)

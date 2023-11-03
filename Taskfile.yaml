@@ -14,7 +14,8 @@ vars:
   DB_PATH: /etc/mysql
   NGINX_PATH: /etc/nginx
   SYSTEMD_PATH: /etc/systemd/system
-  LIMITS_PATH: /etc/security/limits.conf
+  LIMITS_PATH: /etc/security/limits.d/
+  LIMITS_NAME: isuconlimits.conf
   SYSCTLD_PATH: /etc/sysctl.d/
   SYSCTLD_NAME: 100-isucon.conf
 
@@ -274,9 +275,6 @@ tasks:
   get-kernel-file:
     preconditions:
       - task: check-server-id
-    cmds:
-      - sudo cp {{.LIMITS_PATH}} ./$SERVER_ID/etc/security/limits.conf
-      - sudo chown {{.USER}} ./$SERVER_ID/etc/security/limits.conf
   
   get-env-file:
     preconditions:
@@ -316,7 +314,7 @@ tasks:
     preconditions:
       - task: check-server-id
     cmds:
-      - sudo cp ./$SERVER_ID/etc/security/limits.conf {{.LIMITS_PATH}}
+      - sudo cp ./$SERVER_ID/etc/security/limits.d/{{.LIMITS_NAME}} {{.LIMITS_PATH}}
       - sh -c "ulimit -a >/dev/null"
       - sudo cp ./$SERVER_ID/etc/sysctl.d/{{.SYSCTLD_NAME}} {{.SYSCTLD_PATH}}
       - sudo sysctl --system >/dev/null

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1069,10 +1070,9 @@ func getIsuConditions(c echo.Context) error {
 	if conditionLevelCSV == "" {
 		return c.String(http.StatusBadRequest, "missing: condition_level")
 	}
-	conditionLevel := map[string]interface{}{}
-	for _, level := range strings.Split(conditionLevelCSV, ",") {
-		conditionLevel[level] = struct{}{}
-	}
+	conditionLevel := strings.Split(conditionLevelCSV, ",")
+	slices.Sort(conditionLevel)
+	slices.Compact(conditionLevel)
 
 	startTimeStr := c.QueryParam("start_time")
 	var startTime time.Time
@@ -1123,7 +1123,7 @@ func getIsuConditions(c echo.Context) error {
 }
 
 // ISUのコンディションをDBから取得
-func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, conditionLevel map[string]interface{}, startTime time.Time,
+func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, conditionLevel []string, startTime time.Time,
 	limit int, isuName string) ([]*GetIsuConditionResponse, error) {
 
 	type conditionDataTmp struct {
@@ -1137,35 +1137,22 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	conditions := []conditionDataTmp{}
 	var err error
 
-	var condition_level_query_builder strings.Builder
-	filter_count := 0
-	for _, level := range []string{conditionLevelInfo, conditionLevelWarning, conditionLevelCritical} {
-		if _, ok := conditionLevel[level]; !ok {
-			continue
-		}
-		if filter_count == 0 {
-			condition_level_query_builder.WriteString(" AND (")
-		} else {
-			condition_level_query_builder.WriteString(" OR ")
-		}
-		filter_count += 1
-		condition_level_query_builder.WriteString("`condition_level`='")
-		condition_level_query_builder.WriteString(level)
-		condition_level_query_builder.WriteString("'")
-	}
-	condition_level_query_builder.WriteString(") ")
-	if filter_count == 0 {
+	var conditionQuery string
+	switch len(conditionLevel) {
+	case 0:
 		return []*GetIsuConditionResponse{}, nil
-	}
-	if filter_count == 3 {
-		condition_level_query_builder.Reset()
+	case 1:
+		conditionQuery = fmt.Sprintf(" AND `condition_level` = '%v'", conditionLevel[0])
+	case 2:
+		conditionQuery = fmt.Sprintf(" AND `condition_level` IN ('%v', '%v')", conditionLevel[0], conditionLevel[1])
+	case 3:
 	}
 
 	if startTime.IsZero() {
 		err = db.Select(&conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
-				condition_level_query_builder.String()+
+				conditionQuery+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
 			jiaIsuUUID, endTime, limit,
 		)
@@ -1174,7 +1161,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
-				condition_level_query_builder.String()+
+				conditionQuery+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
 			jiaIsuUUID, endTime, startTime, limit,
 		)

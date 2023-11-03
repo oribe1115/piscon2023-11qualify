@@ -1498,7 +1498,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		for _, cond := range toInsert {
 			args = append(args, cond.JiaIsuUUID, cond.Timestamp, cond.IsSitting, cond.Condition, cond.ConditionLevel, cond.Message)
 		}
-		_, err = stmt.Exec(args)
+		_, err = stmt.Exec(args...)
 	}
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)

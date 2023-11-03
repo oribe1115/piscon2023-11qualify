@@ -307,10 +307,6 @@ func stmtClose(stmt *sqlx.Stmt) {
 	_ = stmt.Close()
 }
 
-func namedStmtClose(stmt *sqlx.NamedStmt) {
-	_ = stmt.Close()
-}
-
 var stmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
 	stmt, err := db.PreparexContext(ctx, query)
 	if err != nil {
@@ -343,15 +339,6 @@ func dbSelect(dest interface{}, query string, args ...interface{}) error {
 	}
 	return stmt.Select(dest, args...)
 }
-
-var namedStmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.NamedStmt, error) {
-	stmt, err := db.PrepareNamedContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	runtime.SetFinalizer(stmt, namedStmtClose)
-	return stmt, nil
-}, 90*time.Second, 90*time.Second)
 
 func getSession(r *http.Request) (*sessions.Session, error) {
 	session, err := sessionStore.Get(r, sessionName)
@@ -1446,12 +1433,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	}
 
 	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	stmt, err := namedStmtCache.Get(context.Background(), query)
-	if err != nil {
-		log.Errorf("condition batch insert db error: %v\n", err)
-		return struct{}{}, err
-	}
-	_, err = stmt.Exec(toInsert)
+	_, err := db.NamedExec(query, toInsert)
 	if err != nil {
 		log.Errorf("condition batch insert db error: %v\n", err)
 		return struct{}{}, err

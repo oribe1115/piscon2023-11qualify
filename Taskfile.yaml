@@ -151,7 +151,7 @@ tasks:
           COMMAND: cat {{.DISCOCAT_TRIPLE_BACK_QUOTES}}
       - task: send-buf-to-discord
 
-  send-analysis:
+  analyze:
     desc: alp, slow queryの分析結果をDiscordに送信する
     cmds:
       - task: discocat-alp

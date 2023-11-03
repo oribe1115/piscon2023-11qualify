@@ -21,8 +21,6 @@ import (
 
 	"github.com/motoki317/sc"
 
-	"github.com/felixge/fgprof"
-
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
@@ -214,7 +212,7 @@ func init() {
 }
 
 func main() {
-	http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
+	//http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 	go func() {
 		log.Fatal(http.ListenAndServe(":6060", nil))
 	}()

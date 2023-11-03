@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bytedance/sonic"
+	"github.com/samber/lo"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -646,23 +647,29 @@ func getIsuList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	var conditions []*IsuCondition
+	if len(isuList) > 0 {
+		query := "SELECT * FROM `isu_condition` WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition WHERE jia_isu_uuid IN (?) GROUP BY jia_isu_uuid)"
+		jiaIsuIDs := lo.Map(isuList, func(isu Isu, _ int) any { return isu.JIAIsuUUID })
+		query, args, err := sqlx.In(query, jiaIsuIDs)
+		if err != nil {
+			c.Logger().Errorf("sqlx.In error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		err = db.Select(&conditions, query, args...)
+		if err != nil {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+	conditionsMap := lo.SliceToMap(conditions, func(c *IsuCondition) (string, *IsuCondition) { return c.JIAIsuUUID, c })
+
 	responseList := []GetIsuListResponse{}
 	for _, isu := range isuList {
-		var lastCondition IsuCondition
-		foundLastCondition := true
-		err = dbGet(&lastCondition, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` DESC LIMIT 1",
-			isu.JIAIsuUUID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				foundLastCondition = false
-			} else {
-				c.Logger().Errorf("db error: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-		}
+		lastCondition, ok := conditionsMap[isu.JIAIsuUUID]
 
 		var formattedCondition *GetIsuConditionResponse
-		if foundLastCondition {
+		if ok {
 			conditionLevel, err := calculateConditionLevel(lastCondition.Condition)
 			if err != nil {
 				c.Logger().Error(err)

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -303,6 +304,43 @@ func jsonEncode(res any) []byte {
 	return b
 }
 
+func stmtClose(stmt *sqlx.Stmt) {
+	_ = stmt.Close()
+}
+
+var stmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+	stmt, err := db.PreparexContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	runtime.SetFinalizer(stmt, stmtClose)
+	return stmt, nil
+}, 90*time.Second, 90*time.Second)
+
+func dbExec(query string, args ...any) (sql.Result, error) {
+	stmt, err := stmtCache.Get(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	return stmt.Exec(args...)
+}
+
+func dbGet(dest interface{}, query string, args ...interface{}) error {
+	stmt, err := stmtCache.Get(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	return stmt.Get(dest, args...)
+}
+
+func dbSelect(dest interface{}, query string, args ...interface{}) error {
+	stmt, err := stmtCache.Get(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	return stmt.Select(dest, args...)
+}
+
 func getSession(r *http.Request) (*sessions.Session, error) {
 	session, err := sessionStore.Get(r, sessionName)
 	if err != nil {
@@ -324,7 +362,7 @@ func getUserIDFromSession(c echo.Context) (string, int, error) {
 	jiaUserID := _jiaUserID.(string)
 	var count int
 
-	err = db.Get(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+	err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
 		jiaUserID)
 	if err != nil {
 		return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
@@ -400,7 +438,7 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	_, err = db.Exec(
+	_, err = dbExec(
 		"INSERT INTO `isu_association_config` (`name`, `url`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `url` = VALUES(`url`)",
 		"jia_service_url",
 		request.JIAServiceURL,
@@ -412,7 +450,7 @@ func postInitialize(c echo.Context) error {
 
 	//condition_level
 	conditions := []IsuCondition{}
-	db.Select(&conditions, "SELECT * FROM `isu_condition`")
+	dbSelect(&conditions, "SELECT * FROM `isu_condition`")
 	if err != nil {
 		c.Logger().Errorf("db error : %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -426,7 +464,7 @@ func postInitialize(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
-		_, err = db.Exec(
+		_, err = dbExec(
 			"UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?",
 			cLevel, cond.JIAIsuUUID, cond.Timestamp)
 		if err != nil {
@@ -482,7 +520,7 @@ func postAuthentication(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "invalid JWT payload")
 	}
 
-	_, err = db.Exec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
+	_, err = dbExec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -563,15 +601,8 @@ func getIsuList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
-
 	isuList := []Isu{}
-	err = tx.Select(
+	err = dbSelect(
 		&isuList,
 		"SELECT * FROM `isu` WHERE `jia_user_id` = ? ORDER BY `id` DESC",
 		jiaUserID)
@@ -584,7 +615,7 @@ func getIsuList(c echo.Context) error {
 	for _, isu := range isuList {
 		var lastCondition IsuCondition
 		foundLastCondition := true
-		err = tx.Get(&lastCondition, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` DESC LIMIT 1",
+		err = dbGet(&lastCondition, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` DESC LIMIT 1",
 			isu.JIAIsuUUID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -621,12 +652,6 @@ func getIsuList(c echo.Context) error {
 			Character:          isu.Character,
 			LatestIsuCondition: formattedCondition}
 		responseList = append(responseList, res)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
 	}
 
 	return c.JSONBlob(http.StatusOK, jsonEncode(responseList))
@@ -789,7 +814,7 @@ func getIsuID(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	//var res Isu
-	//err = db.Get(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = dbGet(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	if errors.Is(err, sql.ErrNoRows) {
@@ -833,7 +858,7 @@ func getIsuIcon(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	//var count int
-	//err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
@@ -885,15 +910,8 @@ func getIsuGraph(c echo.Context) error {
 	}
 	date := time.Unix(datetimeInt64, 0).Truncate(time.Hour)
 
-	tx, err := db.Beginx()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
-
 	//var count int
-	//err = tx.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
@@ -917,15 +935,9 @@ func getIsuGraph(c echo.Context) error {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
-	res, err := generateIsuGraphResponse(tx, jiaIsuUUID, date)
+	res, err := generateIsuGraphResponse(jiaIsuUUID, date)
 	if err != nil {
 		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
@@ -933,26 +945,21 @@ func getIsuGraph(c echo.Context) error {
 }
 
 // グラフのデータ点を一日分生成
-func generateIsuGraphResponse(tx *sqlx.Tx, jiaIsuUUID string, startTime time.Time) ([]GraphResponse, error) {
+func generateIsuGraphResponse(jiaIsuUUID string, startTime time.Time) ([]GraphResponse, error) {
 	endTime := startTime.Add(time.Hour * 24)
 
 	dataPoints := make([]GraphDataPointWithInfo, 0, 24)
 	conditionsInThisHour := []IsuCondition{}
 	timestampsInThisHour := []int64{}
 	var startTimeInThisHour time.Time
-	var condition IsuCondition
+	var conditions []IsuCondition
 
-	rows, err := tx.Queryx("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
+	err := dbSelect(&conditions, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("db error: %v", err)
 	}
 
-	for rows.Next() {
-		err = rows.StructScan(&condition)
-		if err != nil {
-			return nil, err
-		}
-
+	for _, condition := range conditions {
 		truncatedConditionTime := condition.Timestamp.Truncate(time.Hour)
 		if truncatedConditionTime != startTimeInThisHour {
 			if len(conditionsInThisHour) > 0 {
@@ -1123,7 +1130,7 @@ func getIsuConditions(c echo.Context) error {
 	}
 
 	var isuName string
-	//err = db.Get(&isuName,
+	//err = dbGet(&isuName,
 	//	"SELECT name FROM `isu` WHERE `jia_isu_uuid` = ? AND `jia_user_id` = ?",
 	//	jiaIsuUUID, jiaUserID,
 	//)
@@ -1187,7 +1194,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	}
 
 	if startTime.IsZero() {
-		err = db.Select(&conditions,
+		err = dbSelect(&conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				conditionQuery+
@@ -1195,7 +1202,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 			jiaIsuUUID, endTime, limit,
 		)
 	} else {
-		err = db.Select(&conditions,
+		err = dbSelect(&conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
@@ -1260,7 +1267,7 @@ func calculateConditionLevel(condition string) (string, error) {
 // ISUの性格毎の最新のコンディション情報
 func getTrend(c echo.Context) error {
 	//characterList := []Isu{}
-	//err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	//err := dbSelect(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
 	//	return c.NoContent(http.StatusInternalServerError)
@@ -1270,7 +1277,7 @@ func getTrend(c echo.Context) error {
 	//
 	//for _, character := range characterList {
 	//	isuList := []Isu{}
-	//	err = db.Select(&isuList,
+	//	err = dbSelect(&isuList,
 	//		"SELECT * FROM `isu` WHERE `character` = ?",
 	//		character.Character,
 	//	)
@@ -1283,7 +1290,7 @@ func getTrend(c echo.Context) error {
 	//	characterCriticalIsuConditions := []*TrendCondition{}
 	//	for _, isu := range isuList {
 	//		conditions := []IsuCondition{}
-	//		err = db.Select(&conditions,
+	//		err = dbSelect(&conditions,
 	//			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC LIMIT 1",
 	//			isu.JIAIsuUUID,
 	//		)
@@ -1346,7 +1353,7 @@ var trendDataCache = sc.NewMust(getTrendData, 500*time.Millisecond, 500*time.Mil
 
 func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	characterList := []Isu{}
-	err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	err := dbSelect(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	if err != nil {
 		return nil, err
 	}
@@ -1363,7 +1370,7 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"
-	err = db.Select(&lastConditions, query)
+	err = dbSelect(&lastConditions, query)
 	if err != nil {
 		return nil, err
 	}
@@ -1439,7 +1446,7 @@ var errIsuNotFound = errors.New("isu not found")
 
 func retrieveIsu(_ context.Context, jiaIsuUUID string) (*Isu, error) {
 	var isu Isu
-	err := db.Get(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	err := dbGet(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errIsuNotFound
@@ -1476,7 +1483,7 @@ func postIsuCondition(c echo.Context) error {
 	}
 
 	//var count int
-	//err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
 	//	return c.NoContent(http.StatusInternalServerError)

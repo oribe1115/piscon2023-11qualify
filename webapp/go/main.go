@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -21,8 +22,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/bytedance/sonic"
 
 	"github.com/motoki317/sc"
 
@@ -1545,7 +1544,7 @@ func postIsuCondition(c echo.Context) error {
 	go func() {
 		conditionsLock.Lock()
 		conditionsQueue = append(conditionsQueue, data...)
-		if len(conditionsQueue) > 50000 {
+		if len(conditionsQueue) > 10000 {
 			insertConditionThrottler.Purge() // immediately initiate next call
 		}
 		conditionsLock.Unlock()
@@ -1590,5 +1589,6 @@ func isValidConditionFormat(conditionStr string) bool {
 }
 
 func getIndex(c echo.Context) error {
+	c.Response().Header().Add("Cache-Control", "public, max-age=86400")
 	return c.File(frontendContentsPath + "/index.html")
 }

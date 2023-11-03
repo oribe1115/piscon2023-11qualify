@@ -697,6 +697,7 @@ func getIsuList(c echo.Context) error {
 
 	err = dbGet(&data, query, jiaUserID)
 	if err != nil {
+		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 

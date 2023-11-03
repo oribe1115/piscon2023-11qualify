@@ -318,8 +318,8 @@ tasks:
       - task: check-server-id
     cmds:
       - sudo cp ./$SERVER_ID/etc/security/limits.conf {{.LIMITS_PATH}}
-      - ulimit -a >/dev/null
-      - sudo cp ./$SERVER_ID/etc/sysctl.d {{.SYSCTLD_PATH}}
+      - sh -c "ulimit -a >/dev/null"
+      - sudo cp -r ./$SERVER_ID/etc/sysctl.d/* {{.SYSCTLD_PATH}}
       - sudo sysctl --system >/dev/null
       
   deploy-envfile:

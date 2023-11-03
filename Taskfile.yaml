@@ -49,7 +49,7 @@ tasks:
     desc: pprofとfgprofで記録する
     deps:
       - task: pprof
-      - task: fgprof
+      # - task: fgprof
 
   pprof:
     # desc: pprofで記録する
@@ -77,7 +77,7 @@ tasks:
     desc: pprofとfgprofのそれぞれの最新データを確認する
     deps:
       - task: pprof-check
-      - task: fgprof-check
+      # - task: fgprof-check
 
   kill-pprof:
     status:

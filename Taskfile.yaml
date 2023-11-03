@@ -318,7 +318,7 @@ tasks:
       - task: check-server-id
     cmds:
       - sudo cp ./$SERVER_ID/etc/security/limits.conf {{.LIMITS_PATH}}
-      - sudo ulimit -a >/dev/null
+      - ulimit -a >/dev/null
       - sudo cp ./$SERVER_ID/etc/sysctl.d {{.SYSCTLD_PATH}}
       - sudo sysctl --system >/dev/null
       

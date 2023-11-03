@@ -1232,7 +1232,6 @@ func postIsuCondition(c echo.Context) error {
 	}
 
 	data := make([]datum, 0)
-	bulkQueries := make([]string, 0)
 	for _, cond := range req {
 		timestamp := time.Unix(cond.Timestamp, 0)
 
@@ -1248,13 +1247,11 @@ func postIsuCondition(c echo.Context) error {
 			Message:    cond.Message,
 		})
 
-		bulkQueries = append(bulkQueries, "(:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)")
 	}
 
 	query := "INSERT INTO `isu_condition`" +
 		"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)" +
-		"	VALUES " +
-		strings.Join(bulkQueries, ", ")
+		"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)"
 
 	_, err = tx.NamedExec(query, data)
 	if err != nil {

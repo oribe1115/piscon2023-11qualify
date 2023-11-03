@@ -1454,14 +1454,14 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	}
 
 	type latestConditionData struct {
-		IsuId          int       `db:"isu_id"`
-		Character      string    `db:"character"`
-		Timestamp      time.Time `db:"timestamp"`
-		ConditionLevel string    `db:"condition_level"`
+		IsuId     int       `db:"isu_id"`
+		Character string    `db:"character"`
+		Timestamp time.Time `db:"timestamp"`
+		Condition string    `db:"condition"`
 	}
 
 	lastConditions := []latestConditionData{}
-	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition_level` FROM latest_isu_condition AS cond " +
+	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` FROM latest_isu_condition AS cond " +
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"ORDER BY timestamp DESC"
 	err = dbSelect(&lastConditions, query)
@@ -1486,7 +1486,11 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 		}
 
 		res := perCharacter[condition.Character]
-		switch condition.ConditionLevel {
+		level, err := calculateConditionLevel(condition.Condition)
+		if err != nil {
+			return nil, err
+		}
+		switch level {
 		case conditionLevelInfo:
 			res.Info = append(res.Info, trendCondition)
 		case conditionLevelWarning:

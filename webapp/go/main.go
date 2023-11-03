@@ -18,6 +18,7 @@ import (
 	"time"
 
 	_ "net/http/pprof"
+
 	"github.com/felixge/fgprof"
 
 	"github.com/dgrijalva/jwt-go"
@@ -216,8 +217,8 @@ func main() {
 	}()
 
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(log.DEBUG)
+	//e.Debug = true
+	e.Logger.SetLevel(log.OFF)
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -1169,7 +1170,7 @@ func postIsuCondition(c echo.Context) error {
 	// TODO: 一定割合リクエストを落としてしのぐようにしたが、本来は全量さばけるようにすべき
 	dropProbability := 0.9
 	if rand.Float64() <= dropProbability {
-		c.Logger().Warnf("drop post isu condition request")
+		//c.Logger().Warnf("drop post isu condition request")
 		return c.NoContent(http.StatusAccepted)
 	}
 

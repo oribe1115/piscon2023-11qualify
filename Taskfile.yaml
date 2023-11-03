@@ -78,12 +78,12 @@ tasks:
   kill-pprof:
     status:
       - sh -c "! sudo lsof -t -i :8090"
-    cmd: sudo lsof -t -i :8090 | xargs kill -9
+    cmd: sudo lsof -t -i :8090 | xargs sudo kill -9
 
   kill-fgprof:
     status:
       - sh -c "! sudo lsof -i :9090"
-    cmd: sudo lsof -t -i :9090 | xargs kill -9
+    cmd: sudo lsof -t -i :9090 | xargs sudo kill -9
 
   pprof-check:
     # desc: pprofでの最新データを確認する

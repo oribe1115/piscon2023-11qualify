@@ -16,6 +16,7 @@ vars:
   SYSTEMD_PATH: /etc/systemd/system
   LIMITS_PATH: /etc/security/limits.conf
   SYSCTLD_PATH: /etc/sysctl.d/
+  SYSCTLD_NAME: 100-isucon.conf
 
   NGINX_LOG: /var/log/nginx/access.log
   DB_SLOW_LOG: /var/log/mysql/mysql-slow.log
@@ -276,8 +277,6 @@ tasks:
     cmds:
       - sudo cp {{.LIMITS_PATH}} ./$SERVER_ID/etc/security/limits.conf
       - sudo chown {{.USER}} ./$SERVER_ID/etc/security/limits.conf
-      - sudo cp -R {{.SYSCTLD_PATH}}/* ./$SERVER_ID/etc/sysctl.d
-      - sudo chown {{.USER}} -R ./$SERVER_ID/etc/sysctl.d
   
   get-env-file:
     preconditions:
@@ -319,7 +318,7 @@ tasks:
     cmds:
       - sudo cp ./$SERVER_ID/etc/security/limits.conf {{.LIMITS_PATH}}
       - sh -c "ulimit -a >/dev/null"
-      - sudo cp -r ./$SERVER_ID/etc/sysctl.d/* {{.SYSCTLD_PATH}}
+      - sudo cp ./$SERVER_ID/etc/sysctl.d/{{.SYSCTLD_NAME}} {{.SYSCTLD_PATH}}
       - sudo sysctl --system >/dev/null
       
   deploy-envfile:

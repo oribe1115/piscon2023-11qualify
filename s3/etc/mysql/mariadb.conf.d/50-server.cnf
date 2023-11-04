@@ -81,7 +81,7 @@ expire_logs_days        = 10
 skip-log-bin
 skip-innodb-doublewrite
 # ディスクイメージをメモリ上にバッファさせる値をきめる設定値 (別鯖なら搭載メモリの80%くらい)
-innodb_buffer_pool_size = 2000MB
+innodb_buffer_pool_size = 1000MB
 # InnoDBの更新ログを記録するディスク上のファイルサイズ(innodb_buffer_pool_sizeの4分の1程度)
 innodb_log_file_size = 500MB
 # innoDBの更新ログを保持するメモリ(default: 8MB)、大量のデータの更新に効く

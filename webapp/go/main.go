@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bytedance/sonic"
-	"github.com/samber/lo"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -23,6 +21,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/bytedance/sonic"
+	"github.com/samber/lo"
 
 	"github.com/motoki317/sc"
 
@@ -1481,6 +1482,14 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		log.Errorf("condition batch insert db error: %v\n", err)
 		return struct{}{}, err
 	}
+	query = "INSERT INTO `last_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)" +
+		"ON DUPLICATE KEY UPDATE timestamp=VALUES(timestamp),is_sitting=VALUES(is_sitting),condition=VALUES(condition),message=VALUES(message)"
+	_, err = db.NamedExec(query, toInsert)
+	if err != nil {
+		log.Errorf("condition batch insert db error: %v\n", err)
+		return struct{}{}, err
+	}
+
 	return struct{}{}, nil
 }, 0, 0, sc.EnableStrictCoalescing())
 

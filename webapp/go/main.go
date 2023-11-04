@@ -301,9 +301,14 @@ func main() {
 			if time.Now().Add(-benchtime).Before(*benchstart.Load()) {
 				continue
 			}
-			var err error = db.Ping()
+			var err error = db0.Ping()
 			if err != nil {
-				e.Logger.Fatalf("db ping error %v", err)
+				e.Logger.Fatalf("db0 ping error %v", err)
+				panic(err)
+			}
+			err = db1.Ping()
+			if err != nil {
+				e.Logger.Fatalf("db1 ping error %v", err)
 				panic(err)
 			}
 		}
@@ -331,33 +336,63 @@ func jsonEncode(res any) []byte {
 func stmtClose(stmt *sqlx.Stmt) {
 	_ = stmt.Close()
 }
-
-var stmtCache = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
-	stmt, err := db.PreparexContext(ctx, query)
-	if err != nil {
-		return nil, err
+func stmtReplaceFunc(dbUse *sqlx.DB) func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+	return func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+		stmt, err := dbUse.PreparexContext(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		runtime.SetFinalizer(stmt, stmtClose)
+		return stmt, nil
 	}
-	runtime.SetFinalizer(stmt, stmtClose)
-	return stmt, nil
-}, 90*time.Second, 90*time.Second)
+}
 
-func dbExec(query string, args ...any) (sql.Result, error) {
-	stmt, err := stmtCache.Get(context.Background(), query)
+var stmtCache0 = sc.NewMust(stmtReplaceFunc(db0), 90*time.Second, 90*time.Second)
+var stmtCache1 = sc.NewMust(stmtReplaceFunc(db1), 90*time.Second, 90*time.Second)
+
+func getDBIndex(jiaIsuUUID string) int {
+	if len(jiaIsuUUID) == 0 || jiaIsuUUID[0] <= '9' {
+		return 0
+	}
+	return 1
+}
+func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
+	switch getDBIndex(jiaIsuUUID) {
+	default:
+		return stmtCache0 //case 0
+	case 1:
+		return stmtCache1
+	}
+}
+func getStmtDB(jiaIsuUUID string) *sqlx.DB {
+	switch getDBIndex(jiaIsuUUID) {
+	default:
+		return db0 //case 0
+	case 1:
+		return db1
+	}
+}
+
+func db0Exec(query string, args ...any) (sql.Result, error) {
+	stmt, err := stmtCache0.Get(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
 	return stmt.Exec(args...)
 }
 
-func dbGet(dest interface{}, query string, args ...interface{}) error {
-	stmt, err := stmtCache.Get(context.Background(), query)
+func db0Get(dest interface{}, query string, args ...interface{}) error {
+	stmt, err := stmtCache0.Get(context.Background(), query)
 	if err != nil {
 		return err
 	}
 	return stmt.Get(dest, args...)
 }
 
-func dbSelect(dest interface{}, query string, args ...interface{}) error {
+func db0Select(dest interface{}, query string, args ...interface{}) error {
+	return dbNSelect(stmtCache0, dest, query, args...)
+}
+func dbNSelect(stmtCache *sc.Cache[string, *sqlx.Stmt], dest interface{}, query string, args ...interface{}) error {
 	stmt, err := stmtCache.Get(context.Background(), query)
 	if err != nil {
 		return err

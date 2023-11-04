@@ -478,6 +478,38 @@ func getJIAServiceURL(tx *sqlx.Tx) string {
 	return config.URL
 }
 
+func initializeConditionLevel(stmtCache *sc.Cache[string, *sqlx.Stmt]) error {
+	conditions := []IsuCondition{}
+	stmt, err := stmtCache.Get(context.Background(), "SELECT * FROM `isu_condition`")
+	if err != nil {
+		return err
+	}
+	err = stmt.Select(&conditions)
+	if err != nil {
+		return err
+	}
+	stmt, err = stmtCache.Get(context.Background(), "UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?`")
+	if err != nil {
+		return err
+	}
+	for _, cond := range conditions {
+		if !isValidConditionFormat(cond.Condition) {
+			return fmt.Errorf("invalid condition format")
+		}
+		cLevel, err := calculateConditionLevel(cond.Condition)
+		if err != nil {
+			return fmt.Errorf("invalid condition format")
+		}
+
+		_, err = stmt.Exec(
+			cLevel, cond.JIAIsuUUID, cond.Timestamp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // POST /initialize
 // サービスを初期化
 func postInitialize(c echo.Context) error {
@@ -489,6 +521,19 @@ func postInitialize(c echo.Context) error {
 	cacheUserExist.Purge()
 
 	if os.Getenv("SERVER_ID") == "s3" {
+		cmd := exec.Command("../sql/init1.sh")
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			c.Logger().Errorf("exec init1.sh error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		err = initializeConditionLevel(stmtCache1)
+		if err != nil {
+			c.Logger().Errorf("db error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 		cacheIsu.Purge()
 
 		return c.JSONBlob(http.StatusOK, jsonEncode(InitializeResponse{
@@ -531,7 +576,7 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	_, err = dbExec(
+	_, err = db0Exec(
 		"INSERT INTO `isu_association_config` (`name`, `url`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `url` = VALUES(`url`)",
 		"jia_service_url",
 		request.JIAServiceURL,
@@ -542,29 +587,10 @@ func postInitialize(c echo.Context) error {
 	}
 
 	//condition_level
-	conditions := []IsuCondition{}
-	dbSelect(&conditions, "SELECT * FROM `isu_condition`")
+	err = initializeConditionLevel(stmtCache0)
 	if err != nil {
 		c.Logger().Errorf("db error : %v", err)
 		return c.NoContent(http.StatusInternalServerError)
-	}
-	for _, cond := range conditions {
-		if !isValidConditionFormat(cond.Condition) {
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		cLevel, err := calculateConditionLevel(cond.Condition)
-		if err != nil {
-			return c.String(http.StatusBadRequest, "bad request body")
-		}
-
-		_, err = dbExec(
-			"UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?",
-			cLevel, cond.JIAIsuUUID, cond.Timestamp)
-		if err != nil {
-			c.Logger().Errorf("db error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-
 	}
 	cacheIsu.Purge()
 	err = <-reciver_err

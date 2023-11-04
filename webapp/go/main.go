@@ -1552,32 +1552,67 @@ type conditionInsertDatum struct {
 }
 
 var conditionsLock sync.Mutex
-var conditionsQueue []*conditionInsertDatum
+var conditionsQueue0 []*conditionInsertDatum
+var conditionsQueue1 []*conditionInsertDatum
+var conditionsQueueLast []*conditionInsertDatum
+
+func insertConditionImpl(dbN *sqlx.DB, toInsert []*conditionInsertDatum) error {
+	if len(toInsert) == 0 {
+		return nil
+	}
+
+	const query = "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
+	_, err := dbN.NamedExec(query, toInsert)
+	if err != nil {
+		log.Errorf("condition batch insert db error: %v\n", err)
+		return err
+	}
+	return nil
+}
 
 var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) (struct{}, error) {
 	conditionsLock.Lock()
-	toInsert := conditionsQueue
-	conditionsQueue = make([]*conditionInsertDatum, 0, len(toInsert))
+	toInsert0 := conditionsQueue0
+	toInsert1 := conditionsQueue1
+	conditionsQueue0 = make([]*conditionInsertDatum, 0, cap(toInsert0))
+	conditionsQueue1 = make([]*conditionInsertDatum, 0, cap(toInsert1))
+	toInsertLast := conditionsQueueLast
+	conditionsQueueLast = make([]*conditionInsertDatum, 0, cap(toInsertLast))
 	conditionsLock.Unlock()
 
-	if len(toInsert) == 0 {
+	insertConditionImpl(db0, toInsert0) //ignore error
+	insertConditionImpl(db1, toInsert1) //ignore error
+
+	if len(toInsertLast) == 0 {
 		return struct{}{}, nil
 	}
 
-	query := "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	_, err := db.NamedExec(query, toInsert)
-	if err != nil {
-		log.Errorf("condition batch insert db error: %v\n", err)
-		return struct{}{}, err
+	toInsertFilterd := map[string]*conditionInsertDatum{}
+	//各isuについて最新の1件を得る
+	for _, newv := range toInsertLast {
+		if c, ok := toInsertFilterd[newv.JiaIsuUUID]; ok {
+			// newv.Timestamp < c.Timestamp
+			if newv.Timestamp.Before(c.Timestamp) {
+				continue
+			}
+		}
+		toInsertFilterd[newv.JiaIsuUUID] = newv
 	}
-	query = "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)" +
+	toInsertArgs := make([]interface{}, 0, len(toInsertFilterd)*5)
+	for _, c := range toInsertFilterd {
+		toInsertArgs = append(toInsertArgs,
+			c.JiaIsuUUID, c.Timestamp, c.IsSitting, c.Condition, c.Message,
+		)
+	}
+	query := "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)VALUES" +
+		"(?,?,?,?,?)" + strings.Repeat(",(?,?,?,?,?)", len(toInsertFilterd)-1) +
 		"ON DUPLICATE KEY UPDATE timestamp=IF(timestamp<VALUES(timestamp),VALUES(timestamp),timestamp)" +
 		",is_sitting=IF(timestamp<VALUES(timestamp),VALUES(is_sitting),is_sitting)" +
 		",condition=IF(timestamp<VALUES(timestamp),VALUES(condition),condition)" +
 		",message=IF(timestamp<VALUES(timestamp),VALUES(message),message)"
-	_, err = db.NamedExec(query, toInsert)
+	_, err := db0.Exec(query, toInsertArgs)
 	if err != nil {
-		log.Errorf("condition batch insert db error: %v\n", err)
+		log.Errorf("condition batch insert(latest_isu_condition) db error: %v\n", err)
 		return struct{}{}, err
 	}
 
@@ -1663,6 +1698,7 @@ func postIsuCondition(c echo.Context) error {
 	//}
 
 	data := make([]*conditionInsertDatum, 0, len(req))
+	var lastdata *conditionInsertDatum
 	for _, cond := range req {
 		timestamp := time.Unix(cond.Timestamp, 0)
 
@@ -1674,25 +1710,46 @@ func postIsuCondition(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
-		data = append(data, &conditionInsertDatum{
+		adddata := &conditionInsertDatum{
 			JiaIsuUUID:     jiaIsuUUID,
 			Timestamp:      timestamp,
 			IsSitting:      cond.IsSitting,
 			Condition:      cond.Condition,
 			ConditionLevel: cLevel,
 			Message:        cond.Message,
-		})
+		}
+		data = append(data, adddata)
+		if lastdata == nil || lastdata.Timestamp.Before(adddata.Timestamp) {
+			lastdata = adddata
+		}
 	}
 
-	go func() {
-		conditionsLock.Lock()
-		conditionsQueue = append(conditionsQueue, data...)
-		if len(conditionsQueue) > 10000 {
-			insertConditionThrottler.Purge() // immediately initiate next call
-		}
-		conditionsLock.Unlock()
-		_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
-	}()
+	switch getDBIndex(jiaIsuUUID) {
+	default: //0
+		go func() {
+			conditionsLock.Lock()
+			conditionsQueue0 = append(conditionsQueue0, data...)
+			conditionsQueueLast = append(conditionsQueueLast, lastdata)
+			length := len(conditionsQueue0)
+			conditionsLock.Unlock()
+			if length > 10000 {
+				insertConditionThrottler.Purge() // immediately initiate next call
+			}
+			_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
+		}()
+	case 1:
+		go func() {
+			conditionsLock.Lock()
+			conditionsQueue1 = append(conditionsQueue1, data...)
+			conditionsQueueLast = append(conditionsQueueLast, lastdata)
+			length := len(conditionsQueue1)
+			conditionsLock.Unlock()
+			if length > 10000 {
+				insertConditionThrottler.Purge() // immediately initiate next call
+			}
+			_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
+		}()
+	}
 
 	return c.NoContent(http.StatusAccepted)
 }

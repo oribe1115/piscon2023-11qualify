@@ -54,9 +54,9 @@ const (
 )
 
 var (
-	db                  *sqlx.DB
-	sessionStore        sessions.Store
-	mySQLConnectionData *MySQLConnectionEnv
+	db0          *sqlx.DB
+	db1          *sqlx.DB
+	sessionStore sessions.Store
 
 	jiaJWTSigningKey *ecdsa.PublicKey
 
@@ -196,13 +196,22 @@ func getEnv(key string, defaultValue string) string {
 	return defaultValue
 }
 
-func NewMySQLConnectionEnv() *MySQLConnectionEnv {
+func NewMySQLConnectionEnv0() *MySQLConnectionEnv {
 	return &MySQLConnectionEnv{
 		Host:     getEnv("MYSQL_HOST", "127.0.0.1"),
 		Port:     getEnv("MYSQL_PORT", "3306"),
 		User:     getEnv("MYSQL_USER", "isucon"),
 		DBName:   getEnv("MYSQL_DBNAME", "isucondition"),
 		Password: getEnv("MYSQL_PASS", "isucon"),
+	}
+}
+func NewMySQLConnectionEnv1() *MySQLConnectionEnv {
+	return &MySQLConnectionEnv{
+		Host:     getEnv("MYSQL_HOST1", getEnv("MYSQL_HOST", "127.0.0.1")),
+		Port:     getEnv("MYSQL_PORT1", getEnv("MYSQL_PORT", "3306")),
+		User:     getEnv("MYSQL_USER1", getEnv("MYSQL_USER", "isucon")),
+		DBName:   getEnv("MYSQL_DBNAME1", getEnv("MYSQL_DBNAME", "isucondition")),
+		Password: getEnv("MYSQL_PASS1", getEnv("MYSQL_PASS", "isucon")),
 	}
 }
 
@@ -263,17 +272,24 @@ func main() {
 	e.GET("/register", getIndex)
 	e.Static("/assets", frontendContentsPath+"/assets")
 
-	mySQLConnectionData = NewMySQLConnectionEnv()
-
 	var err error
-	db, err = mySQLConnectionData.ConnectDB()
+	db0, err = NewMySQLConnectionEnv0().ConnectDB()
 	if err != nil {
-		e.Logger.Fatalf("failed to connect db: %v", err)
+		e.Logger.Fatalf("failed to connect db0: %v", err)
 		return
 	}
-	db.SetMaxIdleConns(100)
-	db.SetMaxOpenConns(100)
-	defer db.Close()
+	db0.SetMaxIdleConns(100)
+	db0.SetMaxOpenConns(100)
+	defer db0.Close()
+
+	db1, err = NewMySQLConnectionEnv1().ConnectDB()
+	if err != nil {
+		e.Logger.Fatalf("failed to connect db1: %v", err)
+		return
+	}
+	db1.SetMaxIdleConns(100)
+	db1.SetMaxOpenConns(100)
+	defer db1.Close()
 
 	tmpTime := &time.Time{}
 	*tmpTime = time.Now()

@@ -412,7 +412,7 @@ var errUserNotFound = errors.New("user not found")
 
 func retrieveUserExist(_ context.Context, jiaUserID string) (bool, error) {
 	var count int
-	err := dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+	err := db0Get(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
 		jiaUserID)
 	if err != nil {
 		return false, err
@@ -440,7 +440,7 @@ func getUserIDFromSession(c echo.Context) (string, int, error) {
 	jiaUserID := _jiaUserID.(string)
 	//var count int
 	//
-	//err = dbGet(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
+	//err = db0Get(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
 	//	jiaUserID)
 	//if err != nil {
 	//	return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
@@ -639,7 +639,7 @@ func postAuthentication(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "invalid JWT payload")
 	}
 
-	_, err = dbExec("INSERT IGNORE INTO `user` (`jia_user_id`) VALUES (?)", jiaUserID)
+	_, err = db0Exec("INSERT IGNORE INTO `user` (`jia_user_id`) VALUES (?)", jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -723,7 +723,7 @@ func getIsuList(c echo.Context) error {
 	}
 
 	isuList := []Isu{}
-	err = dbSelect(
+	err = db0Select(
 		&isuList,
 		"SELECT * FROM `isu` WHERE `jia_user_id` = ? ORDER BY `id` DESC",
 		jiaUserID)
@@ -741,7 +741,8 @@ func getIsuList(c echo.Context) error {
 			c.Logger().Errorf("sqlx.In error: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		err = db.Select(&conditions, query, args...)
+		//INで件数が変わるので、prepareしない方が良い
+		err = db0.Select(&conditions, query, args...)
 		if err != nil {
 			c.Logger().Errorf("db error: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
@@ -838,7 +839,7 @@ func postIsu(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	tx, err := db.Beginx()
+	tx, err := db0.Beginx()
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -941,7 +942,7 @@ func getIsuID(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	//var res Isu
-	//err = dbGet(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = db0Get(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	if errors.Is(err, sql.ErrNoRows) {
@@ -985,7 +986,7 @@ func getIsuIcon(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	//var count int
-	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = db0Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
@@ -1038,7 +1039,7 @@ func getIsuGraph(c echo.Context) error {
 	date := time.Unix(datetimeInt64, 0).Truncate(time.Hour)
 
 	//var count int
-	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//err = db0Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 	//	jiaUserID, jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
@@ -1257,7 +1258,7 @@ func getIsuConditions(c echo.Context) error {
 	}
 
 	var isuName string
-	//err = dbGet(&isuName,
+	//err = db0Get(&isuName,
 	//	"SELECT name FROM `isu` WHERE `jia_isu_uuid` = ? AND `jia_user_id` = ?",
 	//	jiaIsuUUID, jiaUserID,
 	//)
@@ -1394,7 +1395,7 @@ func calculateConditionLevel(condition string) (string, error) {
 // ISUの性格毎の最新のコンディション情報
 func getTrend(c echo.Context) error {
 	//characterList := []Isu{}
-	//err := dbSelect(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	//err := db0Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
 	//	return c.NoContent(http.StatusInternalServerError)
@@ -1404,7 +1405,7 @@ func getTrend(c echo.Context) error {
 	//
 	//for _, character := range characterList {
 	//	isuList := []Isu{}
-	//	err = dbSelect(&isuList,
+	//	err = db0Select(&isuList,
 	//		"SELECT * FROM `isu` WHERE `character` = ?",
 	//		character.Character,
 	//	)
@@ -1480,7 +1481,7 @@ var trendDataCache = sc.NewMust(getTrendData, 0, 500*time.Millisecond)
 
 func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	characterList := []Isu{}
-	err := dbSelect(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	err := db0Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
 	if err != nil {
 		return nil, err
 	}
@@ -1496,7 +1497,7 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` FROM latest_isu_condition AS cond " +
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
 		"ORDER BY timestamp DESC"
-	err = dbSelect(&lastConditions, query)
+	err = db0Select(&lastConditions, query)
 	if err != nil {
 		return nil, err
 	}
@@ -1587,7 +1588,7 @@ var errIsuNotFound = errors.New("isu not found")
 
 func retrieveIsu(_ context.Context, jiaIsuUUID string) (*Isu, error) {
 	var isu Isu
-	err := dbGet(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	err := db0Get(&isu, "SELECT * FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errIsuNotFound
@@ -1624,7 +1625,7 @@ func postIsuCondition(c echo.Context) error {
 	}
 
 	//var count int
-	//err = dbGet(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	//err = db0Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	//if err != nil {
 	//	c.Logger().Errorf("db error: %v", err)
 	//	return c.NoContent(http.StatusInternalServerError)

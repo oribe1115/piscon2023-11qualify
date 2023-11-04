@@ -1082,7 +1082,7 @@ func generateIsuGraphResponse(jiaIsuUUID string, startTime time.Time) ([]GraphRe
 	var startTimeInThisHour time.Time
 	var conditions []IsuCondition
 
-	err := dbSelect(&conditions, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
+	err := dbNSelect(getStmtCache(jiaIsuUUID), &conditions, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? AND `timestamp` >= ? AND `timestamp` < ? ORDER BY `timestamp`", jiaIsuUUID, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("db error: %v", err)
 	}
@@ -1322,7 +1322,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	}
 
 	if startTime.IsZero() {
-		err = dbSelect(&conditions,
+		err = dbNSelect(getStmtCache(jiaIsuUUID), &conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				conditionQuery+
@@ -1330,7 +1330,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 			jiaIsuUUID, endTime, limit,
 		)
 	} else {
-		err = dbSelect(&conditions,
+		err = dbNSelect(getStmtCache(jiaIsuUUID), &conditions,
 			"SELECT "+getColumn+" FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
@@ -1418,7 +1418,7 @@ func getTrend(c echo.Context) error {
 	//	characterCriticalIsuConditions := []*TrendCondition{}
 	//	for _, isu := range isuList {
 	//		conditions := []IsuCondition{}
-	//		err = dbSelect(&conditions,
+	//		err = dbNSelect(getStmtCache(jiaIsuUUID),&conditions,
 	//			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC LIMIT 1",
 	//			isu.JIAIsuUUID,
 	//		)

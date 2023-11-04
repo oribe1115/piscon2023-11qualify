@@ -100,6 +100,13 @@ type IsuCondition struct {
 	Message        string    `db:"message"`
 	CreatedAt      time.Time `db:"created_at"`
 }
+type LatestIsuCondition struct {
+	JIAIsuUUID string    `db:"jia_isu_uuid"`
+	Timestamp  time.Time `db:"timestamp"`
+	IsSitting  bool      `db:"is_sitting"`
+	Condition  string    `db:"condition"`
+	Message    string    `db:"message"`
+}
 
 type MySQLConnectionEnv struct {
 	Host     string
@@ -648,9 +655,9 @@ func getIsuList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	var conditions []*IsuCondition
+	var conditions []*LatestIsuCondition
 	if len(isuList) > 0 {
-		query := "SELECT * FROM `isu_condition` WHERE (jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition WHERE jia_isu_uuid IN (?) GROUP BY jia_isu_uuid)"
+		query := "SELECT * FROM `latest_isu_condition` WHERE jia_isu_uuid IN (?)"
 		jiaIsuIDs := lo.Map(isuList, func(isu Isu, _ int) any { return isu.JIAIsuUUID })
 		query, args, err := sqlx.In(query, jiaIsuIDs)
 		if err != nil {
@@ -663,7 +670,7 @@ func getIsuList(c echo.Context) error {
 			return c.NoContent(http.StatusInternalServerError)
 		}
 	}
-	conditionsMap := lo.SliceToMap(conditions, func(c *IsuCondition) (string, *IsuCondition) { return c.JIAIsuUUID, c })
+	conditionsMap := lo.SliceToMap(conditions, func(c *LatestIsuCondition) (string, *LatestIsuCondition) { return c.JIAIsuUUID, c })
 
 	responseList := []GetIsuListResponse{}
 	for _, isu := range isuList {
@@ -678,7 +685,7 @@ func getIsuList(c echo.Context) error {
 			}
 
 			formattedCondition = &GetIsuConditionResponse{
-				JIAIsuUUID:     lastCondition.JIAIsuUUID,
+				JIAIsuUUID:     isu.JIAIsuUUID,
 				IsuName:        isu.Name,
 				Timestamp:      lastCondition.Timestamp.Unix(),
 				IsSitting:      lastCondition.IsSitting,
@@ -1402,16 +1409,15 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 	}
 
 	type latestConditionData struct {
-		IsuId          int       `db:"isu_id"`
-		Character      string    `db:"character"`
-		Timestamp      time.Time `db:"timestamp"`
-		ConditionLevel string    `db:"condition_level"`
+		IsuId     int       `db:"isu_id"`
+		Character string    `db:"character"`
+		Timestamp time.Time `db:"timestamp"`
+		Condition string    `db:"condition"`
 	}
 
 	lastConditions := []latestConditionData{}
-	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition_level` FROM isu_condition AS cond " +
+	query := "SELECT i.id AS isu_id, `character`, timestamp, `condition` FROM latest_isu_condition AS cond " +
 		"JOIN isu AS i ON i.jia_isu_uuid = cond.jia_isu_uuid " +
-		"WHERE (cond.jia_isu_uuid, timestamp) IN (SELECT jia_isu_uuid, MAX(timestamp) FROM isu_condition GROUP BY jia_isu_uuid) " +
 		"ORDER BY timestamp DESC"
 	err = dbSelect(&lastConditions, query)
 	if err != nil {
@@ -1435,7 +1441,11 @@ func getTrendData(_ context.Context, _ struct{}) ([]*TrendResponse, error) {
 		}
 
 		res := perCharacter[condition.Character]
-		switch condition.ConditionLevel {
+		level, err := calculateConditionLevel(condition.Condition)
+		if err != nil {
+			return nil, err
+		}
+		switch level {
 		case conditionLevelInfo:
 			res.Info = append(res.Info, trendCondition)
 		case conditionLevelWarning:

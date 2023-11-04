@@ -43,5 +43,6 @@ CREATE TABLE `latest_isu_condition` (
 	`is_sitting` TINYINT(1) NOT NULL,
 	`condition` VARCHAR(255) NOT NULL,
 	`message` VARCHAR(255) NOT NULL,
-	PRIMARY KEY (`jia_isu_uuid`)
+	PRIMARY KEY (`jia_isu_uuid`),
+  INDEX idx_timestamp(`timestamp`)
   ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;

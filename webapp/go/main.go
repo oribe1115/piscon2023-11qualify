@@ -372,6 +372,10 @@ func getDBIndex(jiaIsuUUID string) int {
 	if len(jiaIsuUUID) == 0 || ('0' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= '9') {
 		return 0
 	}
+	if DEBUG_COUNT.Add(1)%50 == 0 {
+		fmt.Printf("DEBUG_COUNT: %v", DEBUG_COUNT.Load())
+	}
+
 	return 1
 }
 
@@ -382,10 +386,6 @@ func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
 	case 0:
 		return stmtCache0
 	case 1:
-		if DEBUG_COUNT.Add(1)%50 == 0 {
-			fmt.Printf("DEBUG_COUNT: %v", DEBUG_COUNT.Load())
-		}
-
 		return stmtCache1
 	}
 	log.Errorf("invalid DBIndex")

@@ -354,7 +354,7 @@ func getDBIndex(jiaIsuUUID string) int {
 	// if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '9' ||
 	// 	('a' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'd') ||
 	// 	('A' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'D') {
-	if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '9' {
+	if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '6' {
 		return 0
 	}
 	return 1

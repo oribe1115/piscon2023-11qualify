@@ -25,19 +25,19 @@ lc-messages-dir         = /usr/share/mysql
 
 # Instead of skip-networking the default is now to listen only on
 # localhost which is more compatible and is not less secure.
-bind-address            = 127.0.0.1
+bind-address            = 0.0.0.0
 
 #
 # * Fine Tuning
 #
 #key_buffer_size        = 16M
-#max_allowed_packet     = 16M
+max_allowed_packet      = 50M
 #thread_stack           = 192K
 #thread_cache_size      = 8
 # This replaces the startup script and checks MyISAM tables if needed
 # the first time they are touched
 #myisam_recover_options = BACKUP
-#max_connections        = 100
+max_connections        = 500
 #table_cache            = 64
 #thread_concurrency     = 10
 
@@ -64,8 +64,8 @@ log_error = /var/log/mysql/error.log
 slow_query_log		= 1
 slow_query_log_file    = /var/log/mysql/mysql-slow.log
 long_query_time        = 0
-log_slow_rate_limit    = 10
-#log_slow_verbosity     = query_plan
+log_slow_rate_limit    = 50
+log_slow_verbosity     = query_plan
 log-queries-not-using-indexes
 #
 # The following can be used as easy to replay backup logs or for replication.
@@ -77,6 +77,21 @@ expire_logs_days        = 10
 #max_binlog_size        = 100M
 #binlog_do_db           = include_database_name
 #binlog_ignore_db       = exclude_database_name
+
+skip-log-bin
+skip-innodb-doublewrite
+# ディスクイメージをメモリ上にバッファさせる値をきめる設定値 (別鯖なら搭載メモリの80%くらい)
+innodb_buffer_pool_size = 1000MB
+# InnoDBの更新ログを記録するディスク上のファイルサイズ(innodb_buffer_pool_sizeの4分の1程度)
+innodb_log_file_size = 500MB
+# innoDBの更新ログを保持するメモリ(default: 8MB)、大量のデータの更新に効く
+innodb_log_buffer_size = 50MB
+# 1に設定するとトランザクション単位でログを出力するが 2 を指定すると1秒間に1回ログファイルに出力するようになる
+innodb_flush_log_at_trx_commit = 0
+# データファイル、ログファイルの読み書き方式を指定する (OSによるディスクキャッシュとの2重キャッシュを防ぐ)
+innodb_flush_method = O_DIRECT
+# ORDER BYやGROUP BYのときに使われるメモリ量
+innodb_sort_buffer_size = 10MB
 
 #
 # * Security Features

@@ -336,9 +336,9 @@ func jsonEncode(res any) []byte {
 func stmtClose(stmt *sqlx.Stmt) {
 	_ = stmt.Close()
 }
-func stmtReplaceFunc(dbUse *sqlx.DB) func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+func stmtReplaceFunc(dbUse **sqlx.DB) func(ctx context.Context, query string) (*sqlx.Stmt, error) {
 	return func(ctx context.Context, query string) (*sqlx.Stmt, error) {
-		stmt, err := dbUse.PreparexContext(ctx, query)
+		stmt, err := (*dbUse).PreparexContext(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -347,8 +347,8 @@ func stmtReplaceFunc(dbUse *sqlx.DB) func(ctx context.Context, query string) (*s
 	}
 }
 
-var stmtCache0 = sc.NewMust(stmtReplaceFunc(db0), 90*time.Second, 90*time.Second)
-var stmtCache1 = sc.NewMust(stmtReplaceFunc(db1), 90*time.Second, 90*time.Second)
+var stmtCache0 = sc.NewMust(stmtReplaceFunc(&db0), 90*time.Second, 90*time.Second)
+var stmtCache1 = sc.NewMust(stmtReplaceFunc(&db1), 90*time.Second, 90*time.Second)
 
 func getDBIndex(jiaIsuUUID string) int {
 	if len(jiaIsuUUID) == 0 || jiaIsuUUID[0] <= '9' {

@@ -1611,7 +1611,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	}()
 
 	return struct{}{}, nil
-}, 0, 0, sc.EnableStrictCoalescing())
+}, 10*time.Millisecond, 0, sc.EnableStrictCoalescing())
 
 var errIsuNotFound = errors.New("isu not found")
 

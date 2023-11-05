@@ -379,17 +379,15 @@ func getDBIndex(jiaIsuUUID string) int {
 }
 
 var DEBUG_COUNT atomic.Int64
-var wtr = bufio.NewWriter(os.Stdout)
+var wtr = bufio.NewWriter(os.Stderr)
 
 func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
+	fmt.Fprintf(os.Stderr, "DEBUG_COUNT: %d\n", DEBUG_COUNT.Add(1))
+	wtr.Flush()
 	switch getDBIndex(jiaIsuUUID) {
 	case 0:
 		return stmtCache0
 	case 1:
-		if DEBUG_COUNT.Add(1)%50 == 0 {
-			fmt.Printf("DEBUG_COUNT: %v", DEBUG_COUNT.Load())
-			wtr.Flush()
-		}
 		return stmtCache1
 	}
 	log.Errorf("invalid DBIndex")

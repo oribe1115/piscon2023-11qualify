@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-sql-driver/mysql"
+	"github.com/goccy/go-json"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -1681,7 +1681,8 @@ func postIsuCondition(c echo.Context) error {
 	}
 
 	req := []PostIsuConditionRequest{}
-	err := c.Bind(&req)
+	err := json.NewDecoder(c.Request().Body).Decode(&req)
+	//err := c.Bind(&req)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "bad request body")
 	} else if len(req) == 0 {

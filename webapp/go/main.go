@@ -995,27 +995,27 @@ func getIsuID(c echo.Context) error {
 
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
-	var res Isu
-	err = db0Get(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
-		jiaUserID, jiaIsuUUID)
+	//var res Isu
+	//err = db0Get(&res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//	jiaUserID, jiaIsuUUID)
+	//if err != nil {
+	//	if errors.Is(err, sql.ErrNoRows) {
+	//		return c.String(http.StatusNotFound, "not found: isu")
+	//	}
+	//
+	//	c.Logger().Errorf("db error: %v", err)
+	//	return c.NoContent(http.StatusInternalServerError)
+	//}
+
+	res, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, errIsuNotFound) {
 			return c.String(http.StatusNotFound, "not found: isu")
 		}
 
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-
-	// res, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
-	// if err != nil {
-	// 	if errors.Is(err, errIsuNotFound) {
-	// 		return c.String(http.StatusNotFound, "not found: isu")
-	// 	}
-
-	// 	c.Logger().Errorf("db error: %v", err)
-	// 	return c.NoContent(http.StatusInternalServerError)
-	// }
 
 	if res.JIAUserID != jiaUserID {
 		return c.String(http.StatusNotFound, "not found: isu")
@@ -1092,30 +1092,30 @@ func getIsuGraph(c echo.Context) error {
 	}
 	date := time.Unix(datetimeInt64, 0).Truncate(time.Hour)
 
-	var count int
-	err = db0Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
-		jiaUserID, jiaIsuUUID)
+	//var count int
+	//err = db0Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	//	jiaUserID, jiaIsuUUID)
+	//if err != nil {
+	//	c.Logger().Errorf("db error: %v", err)
+	//	return c.NoContent(http.StatusInternalServerError)
+	//}
+	//if count == 0 {
+	//	return c.String(http.StatusNotFound, "not found: isu")
+	//}
+
+	isu, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
 	if err != nil {
+		if errors.Is(err, errIsuNotFound) {
+			return c.String(http.StatusNotFound, "not found: isu")
+		}
+
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	if count == 0 {
+
+	if isu.JIAUserID != jiaUserID {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
-
-	// isu, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
-	// if err != nil {
-	// 	if errors.Is(err, errIsuNotFound) {
-	// 		return c.String(http.StatusNotFound, "not found: isu")
-	// 	}
-
-	// 	c.Logger().Errorf("db error: %v", err)
-	// 	return c.NoContent(http.StatusInternalServerError)
-	// }
-
-	// if isu.JIAUserID != jiaUserID {
-	// 	return c.String(http.StatusNotFound, "not found: isu")
-	// }
 
 	res, err := generateIsuGraphResponse(jiaIsuUUID, date)
 	if err != nil {
@@ -1312,12 +1312,22 @@ func getIsuConditions(c echo.Context) error {
 	}
 
 	var isuName string
-	err = db0Get(&isuName,
-		"SELECT name FROM `isu` WHERE `jia_isu_uuid` = ? AND `jia_user_id` = ?",
-		jiaIsuUUID, jiaUserID,
-	)
+	//err = db0Get(&isuName,
+	//	"SELECT name FROM `isu` WHERE `jia_isu_uuid` = ? AND `jia_user_id` = ?",
+	//	jiaIsuUUID, jiaUserID,
+	//)
+	//if err != nil {
+	//	if errors.Is(err, sql.ErrNoRows) {
+	//		return c.String(http.StatusNotFound, "not found: isu")
+	//	}
+	//
+	//	c.Logger().Errorf("db error: %v", err)
+	//	return c.NoContent(http.StatusInternalServerError)
+	//}
+
+	isu, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, errIsuNotFound) {
 			return c.String(http.StatusNotFound, "not found: isu")
 		}
 
@@ -1325,21 +1335,11 @@ func getIsuConditions(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	// isu, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
-	// if err != nil {
-	// 	if errors.Is(err, errIsuNotFound) {
-	// 		return c.String(http.StatusNotFound, "not found: isu")
-	// 	}
+	if isu.JIAUserID != jiaUserID {
+		return c.String(http.StatusNotFound, "not found: isu")
+	}
 
-	// 	c.Logger().Errorf("db error: %v", err)
-	// 	return c.NoContent(http.StatusInternalServerError)
-	// }
-
-	// if isu.JIAUserID != jiaUserID {
-	// 	return c.String(http.StatusNotFound, "not found: isu")
-	// }
-
-	// isuName = isu.Name
+	isuName = isu.Name
 
 	conditionsResponse, err := getIsuConditionsFromDB(jiaIsuUUID, endTime, conditionLevel, startTime, conditionLimit, isuName)
 	if err != nil {

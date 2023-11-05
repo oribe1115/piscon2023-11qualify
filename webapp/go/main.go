@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ecdsa"
@@ -372,20 +373,21 @@ func getDBIndex(jiaIsuUUID string) int {
 	if len(jiaIsuUUID) == 0 || ('0' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= '9') {
 		return 0
 	}
-	if DEBUG_COUNT.Add(1)%50 == 0 {
-		fmt.Printf("DEBUG_COUNT: %v", DEBUG_COUNT.Load())
-	}
-
 	return 1
 }
 
 var DEBUG_COUNT atomic.Int64
+var wtr = bufio.NewWriter(os.Stdout)
 
 func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
 	switch getDBIndex(jiaIsuUUID) {
 	case 0:
 		return stmtCache0
 	case 1:
+		if DEBUG_COUNT.Add(1)%50 == 0 {
+			fmt.Printf("DEBUG_COUNT: %v", DEBUG_COUNT.Load())
+			wtr.Flush()
+		}
 		return stmtCache1
 	}
 	log.Errorf("invalid DBIndex")

@@ -351,7 +351,7 @@ var stmtCache0 = sc.NewMust(stmtReplaceFunc(&db0), 90*time.Second, 90*time.Secon
 var stmtCache1 = sc.NewMust(stmtReplaceFunc(&db1), 90*time.Second, 90*time.Second)
 
 func getDBIndex(jiaIsuUUID string) int {
-	if len(jiaIsuUUID) == 0 || jiaIsuUUID[0] <= '9' {
+	if len(jiaIsuUUID) == 0 || jiaIsuUUID[0] <= 'd' {
 		return 0
 	}
 	return 1
@@ -362,14 +362,6 @@ func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
 		return stmtCache0 //case 0
 	case 1:
 		return stmtCache1
-	}
-}
-func getStmtDB(jiaIsuUUID string) *sqlx.DB {
-	switch getDBIndex(jiaIsuUUID) {
-	default:
-		return db0 //case 0
-	case 1:
-		return db1
 	}
 }
 

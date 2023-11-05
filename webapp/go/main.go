@@ -336,36 +336,53 @@ func jsonEncode(res any) []byte {
 func stmtClose(stmt *sqlx.Stmt) {
 	_ = stmt.Close()
 }
-func stmtReplaceFunc(dbUse **sqlx.DB) func(ctx context.Context, query string) (*sqlx.Stmt, error) {
-	return func(ctx context.Context, query string) (*sqlx.Stmt, error) {
-		stmt, err := (*dbUse).PreparexContext(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-		runtime.SetFinalizer(stmt, stmtClose)
-		return stmt, nil
-	}
-}
 
-var stmtCache0 = sc.NewMust(stmtReplaceFunc(&db0), 90*time.Second, 90*time.Second)
-var stmtCache1 = sc.NewMust(stmtReplaceFunc(&db1), 90*time.Second, 90*time.Second)
+// func stmtReplaceFunc(dbUse **sqlx.DB) func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+// 	return func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+// 		stmt, err := (*dbUse).PreparexContext(ctx, query)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		runtime.SetFinalizer(stmt, stmtClose)
+// 		return stmt, nil
+// 	}
+// }
+
+var stmtCache0 = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+	stmt, err := db0.PreparexContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	runtime.SetFinalizer(stmt, stmtClose)
+	return stmt, nil
+}, 90*time.Second, 90*time.Second)
+var stmtCache1 = sc.NewMust(func(ctx context.Context, query string) (*sqlx.Stmt, error) {
+	stmt, err := db1.PreparexContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	runtime.SetFinalizer(stmt, stmtClose)
+	return stmt, nil
+}, 90*time.Second, 90*time.Second)
 
 func getDBIndex(jiaIsuUUID string) int {
 	// if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '9' ||
 	// 	('a' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'd') ||
 	// 	('A' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'D') {
-	if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '6' {
+	if len(jiaIsuUUID) == 0 || ('0' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= '9') {
 		return 0
 	}
 	return 1
 }
 func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
 	switch getDBIndex(jiaIsuUUID) {
+	case 0:
+		return stmtCache0
 	case 1:
 		return stmtCache1
-	default:
-		return stmtCache0 //case 0
 	}
+	log.Errorf("invalid DBIndex")
+	return stmtCache0
 }
 
 func db0Exec(query string, args ...any) (sql.Result, error) {

@@ -1600,12 +1600,8 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		}
 		toInsertArgs := make([]interface{}, 0, len(toInsertFilterd)*5)
 		for _, c := range toInsertFilterd {
-			is_sitting := 0
-			if c.IsSitting {
-				is_sitting = 1
-			}
 			toInsertArgs = append(toInsertArgs,
-				c.JiaIsuUUID, c.Timestamp, is_sitting, c.Condition, c.Message,
+				c.JiaIsuUUID, c.Timestamp, c.IsSitting, c.Condition, c.Message,
 			)
 		}
 		query := "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)VALUES" +

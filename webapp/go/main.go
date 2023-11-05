@@ -361,10 +361,10 @@ func getDBIndex(jiaIsuUUID string) int {
 }
 func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
 	switch getDBIndex(jiaIsuUUID) {
-	default:
-		return stmtCache0 //case 0
 	case 1:
 		return stmtCache1
+	default:
+		return stmtCache0 //case 0
 	}
 }
 
@@ -1757,24 +1757,24 @@ func postIsuCondition(c echo.Context) error {
 	}
 
 	switch getDBIndex(jiaIsuUUID) {
-	default: //0
-		go func() {
-			conditionsLock.Lock()
-			conditionsQueue0 = append(conditionsQueue0, data...)
-			conditionsQueueLast = append(conditionsQueueLast, lastdata)
-			length := len(conditionsQueue0)
-			conditionsLock.Unlock()
-			if length > 10000 {
-				insertConditionThrottler.Purge() // immediately initiate next call
-			}
-			_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
-		}()
 	case 1:
 		go func() {
 			conditionsLock.Lock()
 			conditionsQueue1 = append(conditionsQueue1, data...)
 			conditionsQueueLast = append(conditionsQueueLast, lastdata)
 			length := len(conditionsQueue1)
+			conditionsLock.Unlock()
+			if length > 10000 {
+				insertConditionThrottler.Purge() // immediately initiate next call
+			}
+			_, _ = insertConditionThrottler.Get(context.Background(), struct{}{})
+		}()
+	default: //0
+		go func() {
+			conditionsLock.Lock()
+			conditionsQueue0 = append(conditionsQueue0, data...)
+			conditionsQueueLast = append(conditionsQueueLast, lastdata)
+			length := len(conditionsQueue0)
 			conditionsLock.Unlock()
 			if length > 10000 {
 				insertConditionThrottler.Purge() // immediately initiate next call

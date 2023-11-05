@@ -1544,9 +1544,13 @@ type conditionInsertDatum struct {
 }
 
 var conditionsLock sync.Mutex
-var conditionsQueue0 []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 20000)
-var conditionsQueue1 []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 20000)
-var conditionsQueueLast []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 20000)
+var conditionsQueue0 []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 10000)
+var conditionsQueue1 []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 5000)
+var conditionsQueueLast []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 5000)
+var conditionsTMPLock sync.Mutex
+var conditionsQueue0TMP []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 10000)
+var conditionsQueue1TMP []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 5000)
+var conditionsQueueLastTMP []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 5000)
 
 func insertConditionImpl(dbN *sqlx.DB, toInsert []*conditionInsertDatum) error {
 	if len(toInsert) == 0 {
@@ -1562,26 +1566,42 @@ func insertConditionImpl(dbN *sqlx.DB, toInsert []*conditionInsertDatum) error {
 	return nil
 }
 
-var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) (struct{}, error) {
+func insertConditionTrigger() {
+	conditionsTMPLock.Lock()
+	defer conditionsTMPLock.Unlock()
+
 	conditionsLock.Lock()
-	toInsert0 := conditionsQueue0
-	toInsert1 := conditionsQueue1
-	conditionsQueue0 = make([]*conditionInsertDatum, 0, cap(toInsert0))
-	conditionsQueue1 = make([]*conditionInsertDatum, 0, cap(toInsert1))
-	toInsertLast := conditionsQueueLast
-	conditionsQueueLast = make([]*conditionInsertDatum, 0, cap(toInsertLast))
+	conditionsQueue0, conditionsQueue0TMP = conditionsQueue0TMP, conditionsQueue0
+	conditionsQueue1, conditionsQueue1TMP = conditionsQueue1TMP, conditionsQueue1
+	conditionsQueueLast, conditionsQueueLastTMP = conditionsQueueLastTMP, conditionsQueueLast
 	conditionsLock.Unlock()
 
-	go insertConditionImpl(db0, toInsert0) //ignore error
-	go insertConditionImpl(db1, toInsert1) //ignore error
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
-		if len(toInsertLast) == 0 {
+		defer wg.Done()
+		insertConditionImpl(db0, conditionsQueue0TMP) //ignore error
+		for i := range conditionsQueue0TMP {
+			conditionsQueue0TMP[i] = nil
+		}
+		conditionsQueue0TMP = conditionsQueue0TMP[:0]
+	}()
+	go func() {
+		defer wg.Done()
+		insertConditionImpl(db1, conditionsQueue1TMP) //ignore error
+		for i := range conditionsQueue1TMP {
+			conditionsQueue1TMP[i] = nil
+		}
+		conditionsQueue1TMP = conditionsQueue1TMP[:0]
+	}()
+	func() {
+		if len(conditionsQueueLastTMP) == 0 {
 			return
 		}
 
 		toInsertFilterd := map[string]*conditionInsertDatum{}
 		//各isuについて最新の1件を得る
-		for _, newv := range toInsertLast {
+		for _, newv := range conditionsQueueLastTMP {
 			if c, ok := toInsertFilterd[newv.JiaIsuUUID]; ok {
 				// newv.Timestamp < c.Timestamp
 				if newv.Timestamp.Before(c.Timestamp) {
@@ -1608,8 +1628,18 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 			log.Errorf("condition batch insert(latest_isu_condition) db error: %v\n", err)
 			return
 		}
+
+		for i := range conditionsQueueLastTMP {
+			conditionsQueueLastTMP[i] = nil
+		}
+		conditionsQueueLastTMP = conditionsQueueLastTMP[:0]
 	}()
 
+	wg.Wait()
+}
+
+var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) (struct{}, error) {
+	go insertConditionTrigger()
 	return struct{}{}, nil
 }, 10*time.Millisecond, 0, sc.EnableStrictCoalescing())
 

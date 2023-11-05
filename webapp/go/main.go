@@ -1610,10 +1610,11 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		}
 		query := "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)VALUES" +
 			"(?,?,?,?,?)" + strings.Repeat(",(?,?,?,?,?)", len(toInsertFilterd)-1) +
-			"ON DUPLICATE KEY UPDATE timestamp=IF(timestamp<VALUES(timestamp),VALUES(timestamp),timestamp)" +
-			",`is_sitting`=IF(timestamp<VALUES(timestamp),VALUES(`is_sitting`),`is_sitting`)" +
-			",`condition`=IF(timestamp<VALUES(timestamp),VALUES(`condition`),`condition`)" +
-			",message=IF(timestamp<VALUES(timestamp),VALUES(message),message)"
+			"ON DUPLICATE KEY UPDATE" +
+			"`is_sitting`=IF(`timestamp`<VALUES(`timestamp`),VALUES(`is_sitting`),`is_sitting`)" +
+			",`condition`=IF(`timestamp`<VALUES(`timestamp`),VALUES(`condition`),`condition`)" +
+			",message=IF(`timestamp`<VALUES(`timestamp`),VALUES(message),message)" +
+			",`timestamp`=IF(`timestamp`<VALUES(`timestamp`),VALUES(`timestamp`),`timestamp`)"
 		_, err := db0.Exec(query, toInsertArgs...)
 		if err != nil {
 			log.Errorf("condition batch insert(latest_isu_condition) db error: %v\n", err)

@@ -351,9 +351,10 @@ var stmtCache0 = sc.NewMust(stmtReplaceFunc(&db0), 90*time.Second, 90*time.Secon
 var stmtCache1 = sc.NewMust(stmtReplaceFunc(&db1), 90*time.Second, 90*time.Second)
 
 func getDBIndex(jiaIsuUUID string) int {
-	if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '9' ||
-		('a' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'd') ||
-		('A' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'D') {
+	// if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '9' ||
+	// 	('a' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'd') ||
+	// 	('A' <= jiaIsuUUID[len(jiaIsuUUID)-1] && jiaIsuUUID[len(jiaIsuUUID)-1] <= 'D') {
+	if len(jiaIsuUUID) == 0 || jiaIsuUUID[len(jiaIsuUUID)-1] <= '9' {
 		return 0
 	}
 	return 1

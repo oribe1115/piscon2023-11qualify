@@ -1326,17 +1326,18 @@ func getIsuConditions(c echo.Context) error {
 	//}
 
 	isu, err := cacheIsu.Get(context.Background(), jiaIsuUUID)
+	notFound := false
 	if err != nil {
 		if errors.Is(err, errIsuNotFound) {
-			return c.String(http.StatusNotFound, "not found: isu")
+			notFound = true
+		} else {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
 		}
-
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
 	}
 
 	if isu.JIAUserID != jiaUserID {
-		return c.String(http.StatusNotFound, "not found: isu")
+		notFound = true
 	}
 
 	isuName = isu.Name
@@ -1345,6 +1346,13 @@ func getIsuConditions(c echo.Context) error {
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	if notFound {
+		if len(conditionsResponse) != 0 {
+			c.Logger().Errorf("conditionsResponse NOT NULL!!!: %v, %v, %v", jiaIsuUUID, conditionLevel, len(conditionsResponse))
+		}
+		return c.String(http.StatusNotFound, "not found: isu")
 	}
 	return c.JSONBlob(http.StatusOK, jsonEncode(conditionsResponse))
 }

@@ -1552,9 +1552,9 @@ type conditionInsertDatum struct {
 }
 
 var conditionsLock sync.Mutex
-var conditionsQueue0 []*conditionInsertDatum
-var conditionsQueue1 []*conditionInsertDatum
-var conditionsQueueLast []*conditionInsertDatum
+var conditionsQueue0 []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 20000)
+var conditionsQueue1 []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 20000)
+var conditionsQueueLast []*conditionInsertDatum = make([]*conditionInsertDatum, 0, 20000)
 
 func insertConditionImpl(dbN *sqlx.DB, toInsert []*conditionInsertDatum) error {
 	if len(toInsert) == 0 {

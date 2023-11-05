@@ -374,11 +374,18 @@ func getDBIndex(jiaIsuUUID string) int {
 	}
 	return 1
 }
+
+var DEBUG_COUNT atomic.Int64
+
 func getStmtCache(jiaIsuUUID string) *sc.Cache[string, *sqlx.Stmt] {
 	switch getDBIndex(jiaIsuUUID) {
 	case 0:
 		return stmtCache0
 	case 1:
+		if DEBUG_COUNT.Add(1)%50 == 0 {
+			fmt.Printf("DEBUG_COUNT: %v", DEBUG_COUNT.Load())
+		}
+
 		return stmtCache1
 	}
 	log.Errorf("invalid DBIndex")

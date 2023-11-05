@@ -245,8 +245,8 @@ func main() {
 	}()
 
 	e := echo.New()
-	//e.Debug = true
-	e.Logger.SetLevel(log.ERROR)
+	e.Debug = true
+	e.Logger.SetLevel(log.INFO)
 
 	//e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -1273,6 +1273,7 @@ func calculateGraphDataPoint(isuConditions []IsuCondition) (GraphDataPoint, erro
 // GET /api/condition/:jia_isu_uuid
 // ISUのコンディションを取得
 func getIsuConditions(c echo.Context) error {
+		c.Logger().Errorf("getIsuConditions")
 	jiaUserID, errStatusCode, err := getUserIDFromSession(c)
 	if err != nil {
 		if errStatusCode == http.StatusUnauthorized {

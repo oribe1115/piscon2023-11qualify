@@ -1580,41 +1580,42 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 	conditionsQueueLast = make([]*conditionInsertDatum, 0, cap(toInsertLast))
 	conditionsLock.Unlock()
 
-	insertConditionImpl(db0, toInsert0) //ignore error
-	insertConditionImpl(db1, toInsert1) //ignore error
-
-	if len(toInsertLast) == 0 {
-		return struct{}{}, nil
-	}
-
-	toInsertFilterd := map[string]*conditionInsertDatum{}
-	//各isuについて最新の1件を得る
-	for _, newv := range toInsertLast {
-		if c, ok := toInsertFilterd[newv.JiaIsuUUID]; ok {
-			// newv.Timestamp < c.Timestamp
-			if newv.Timestamp.Before(c.Timestamp) {
-				continue
-			}
+	go insertConditionImpl(db0, toInsert0) //ignore error
+	go insertConditionImpl(db1, toInsert1) //ignore error
+	go func() {
+		if len(toInsertLast) == 0 {
+			return
 		}
-		toInsertFilterd[newv.JiaIsuUUID] = newv
-	}
-	toInsertArgs := make([]interface{}, 0, len(toInsertFilterd)*5)
-	for _, c := range toInsertFilterd {
-		toInsertArgs = append(toInsertArgs,
-			c.JiaIsuUUID, c.Timestamp, c.IsSitting, c.Condition, c.Message,
-		)
-	}
-	query := "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)VALUES" +
-		"(?,?,?,?,?)" + strings.Repeat(",(?,?,?,?,?)", len(toInsertFilterd)-1) +
-		"ON DUPLICATE KEY UPDATE timestamp=IF(timestamp<VALUES(timestamp),VALUES(timestamp),timestamp)" +
-		",is_sitting=IF(timestamp<VALUES(timestamp),VALUES(is_sitting),is_sitting)" +
-		",`condition`=IF(timestamp<VALUES(timestamp),VALUES(`condition`),`condition`)" +
-		",message=IF(timestamp<VALUES(timestamp),VALUES(message),message)"
-	_, err := db0.Exec(query, toInsertArgs...)
-	if err != nil {
-		log.Errorf("condition batch insert(latest_isu_condition) db error: %v\n", err)
-		return struct{}{}, err
-	}
+
+		toInsertFilterd := map[string]*conditionInsertDatum{}
+		//各isuについて最新の1件を得る
+		for _, newv := range toInsertLast {
+			if c, ok := toInsertFilterd[newv.JiaIsuUUID]; ok {
+				// newv.Timestamp < c.Timestamp
+				if newv.Timestamp.Before(c.Timestamp) {
+					continue
+				}
+			}
+			toInsertFilterd[newv.JiaIsuUUID] = newv
+		}
+		toInsertArgs := make([]interface{}, 0, len(toInsertFilterd)*5)
+		for _, c := range toInsertFilterd {
+			toInsertArgs = append(toInsertArgs,
+				c.JiaIsuUUID, c.Timestamp, c.IsSitting, c.Condition, c.Message,
+			)
+		}
+		query := "INSERT INTO `latest_isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)VALUES" +
+			"(?,?,?,?,?)" + strings.Repeat(",(?,?,?,?,?)", len(toInsertFilterd)-1) +
+			"ON DUPLICATE KEY UPDATE timestamp=IF(timestamp<VALUES(timestamp),VALUES(timestamp),timestamp)" +
+			",is_sitting=IF(timestamp<VALUES(timestamp),VALUES(is_sitting),is_sitting)" +
+			",`condition`=IF(timestamp<VALUES(timestamp),VALUES(`condition`),`condition`)" +
+			",message=IF(timestamp<VALUES(timestamp),VALUES(message),message)"
+		_, err := db0.Exec(query, toInsertArgs...)
+		if err != nil {
+			log.Errorf("condition batch insert(latest_isu_condition) db error: %v\n", err)
+			return
+		}
+	}()
 
 	return struct{}{}, nil
 }, 0, 0, sc.EnableStrictCoalescing())

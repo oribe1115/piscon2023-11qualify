@@ -1557,11 +1557,16 @@ func insertConditionImpl(dbN *sqlx.DB, toInsert []*conditionInsertDatum) error {
 		return nil
 	}
 
+	const BATCH_SIZE = 65535/6 - 20
+
 	const query = "INSERT INTO `isu_condition` (`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`) VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"
-	_, err := dbN.NamedExec(query, toInsert)
-	if err != nil {
-		log.Errorf("condition batch insert db error: %v\n", err)
-		return err
+
+	for i := 0; i < len(toInsert); i += BATCH_SIZE {
+		_, err := dbN.NamedExec(query, toInsert[i:min(len(toInsert), i+BATCH_SIZE)])
+		if err != nil {
+			log.Errorf("condition batch insert db error: %v\n", err)
+			return err
+		}
 	}
 	return nil
 }

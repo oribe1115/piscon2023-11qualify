@@ -1649,7 +1649,7 @@ func insertConditionTrigger() {
 var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) (struct{}, error) {
 	go insertConditionTrigger()
 	return struct{}{}, nil
-}, 1*time.Millisecond, 1000*time.Millisecond, sc.EnableStrictCoalescing())
+}, 0*time.Millisecond, 1000*time.Millisecond, sc.EnableStrictCoalescing())
 
 var errIsuNotFound = errors.New("isu not found")
 

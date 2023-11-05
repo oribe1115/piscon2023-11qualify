@@ -488,7 +488,7 @@ func initializeConditionLevel(stmtCache *sc.Cache[string, *sqlx.Stmt]) error {
 	if err != nil {
 		return err
 	}
-	stmt, err = stmtCache.Get(context.Background(), "UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?`")
+	stmt, err = stmtCache.Get(context.Background(), "UPDATE `isu_condition` SET condition_level = ? WHERE jia_isu_uuid = ? AND timestamp = ?")
 	if err != nil {
 		return err
 	}
@@ -563,7 +563,7 @@ func postInitialize(c echo.Context) error {
 		defer res.Body.Close()
 
 		if res.StatusCode != http.StatusOK {
-			reciver_err <- fmt.Errorf("Initialize returned error: status code %v", res.StatusCode)
+			reciver_err <- fmt.Errorf("initialize returned error: status code %v", res.StatusCode)
 			return
 		}
 	}()

@@ -1342,6 +1342,7 @@ func getIsuConditions(c echo.Context) error {
 
 	isuName = isu.Name
 
+	c.Logger().Errorf("getIsuConditionsFromDB")
 	conditionsResponse, err := getIsuConditionsFromDB(jiaIsuUUID, endTime, conditionLevel, startTime, conditionLimit, isuName)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)

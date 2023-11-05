@@ -1610,7 +1610,7 @@ var insertConditionThrottler = sc.NewMust(func(ctx context.Context, _ struct{}) 
 		",is_sitting=IF(timestamp<VALUES(timestamp),VALUES(is_sitting),is_sitting)" +
 		",condition=IF(timestamp<VALUES(timestamp),VALUES(condition),condition)" +
 		",message=IF(timestamp<VALUES(timestamp),VALUES(message),message)"
-	_, err := db0.Exec(query, toInsertArgs)
+	_, err := db0.Exec(query, toInsertArgs...)
 	if err != nil {
 		log.Errorf("condition batch insert(latest_isu_condition) db error: %v\n", err)
 		return struct{}{}, err

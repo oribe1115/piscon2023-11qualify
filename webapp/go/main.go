@@ -263,6 +263,8 @@ func main() {
 	e.GET("/api/isu/:jia_isu_uuid/graph", getIsuGraph)
 	e.GET("/api/condition/:jia_isu_uuid", getIsuConditions)
 	e.GET("/api/trend", getTrend)
+	e.POST("/api/forget/isu/:jia_isu_uuid", postForgetIsu)
+	e.POST("/api/forget/user/:jia_user_id", postForgetUser)
 
 	e.POST("/api/condition/:jia_isu_uuid", postIsuCondition)
 
@@ -667,6 +669,17 @@ func postAuthentication(c echo.Context) error {
 	}
 
 	cacheUserExist.Forget(jiaUserID)
+	go func() {
+		req, err := http.NewRequest(http.MethodPost, "http://172.31.38.28/api/forget/user/"+jiaUserID, bytes.NewBuffer([]byte{}))
+		if err != nil {
+			return
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return
+		}
+		defer res.Body.Close()
+	}()
 
 	session, err := getSession(c.Request())
 	if err != nil {
@@ -943,8 +956,30 @@ func postIsu(c echo.Context) error {
 	}
 
 	cacheIsu.Forget(jiaIsuUUID)
+	go func() {
+		req, err := http.NewRequest(http.MethodPost, "http://172.31.38.28/api/forget/isu/"+jiaIsuUUID, bytes.NewBuffer([]byte{}))
+		if err != nil {
+			return
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return
+		}
+		defer res.Body.Close()
+	}()
 
 	return c.JSONBlob(http.StatusCreated, jsonEncode(isu))
+}
+
+func postForgetIsu(c echo.Context) error {
+	jiaIsuUUID := c.Param("jia_isu_uuid")
+	cacheIsu.Forget(jiaIsuUUID)
+	return c.NoContent(http.StatusOK)
+}
+func postForgetUser(c echo.Context) error {
+	jiaUserID := c.Param("jia_user_id")
+	cacheUserExist.Forget(jiaUserID)
+	return c.NoContent(http.StatusOK)
 }
 
 // GET /api/isu/:jia_isu_uuid
